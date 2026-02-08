@@ -55,11 +55,11 @@ s/{{LOGO}}/![](https://example.com/logo.png)/
 ```mermaid
 graph LR
     subgraph "SEDMAT Expression"
-        CMD[s] --> SEP1[/]
+        CMD[s] --> SEP1["/"]
         SEP1 --> PAT["pattern"]
-        PAT --> SEP2[/]
+        PAT --> SEP2["/"]
         SEP2 --> REP["replacement"]
-        REP --> SEP3[/]
+        REP --> SEP3["/"]
         SEP3 --> FLAGS["flags"]
     end
     
