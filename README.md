@@ -1,7 +1,7 @@
 # SEDMAT: Sed-Expression-Driven Markdown Annotation & Transformation
 
-**Version**: 1.0  
-**Last Updated**: 2026-02-07  
+**Version**: 1.1  
+**Last Updated**: 2026-02-09  
 **Status**: Draft
 
 ## Abstract
@@ -334,52 +334,122 @@ height         = ("height" | "h") "=" number
 number         = DIGIT+
 ```
 
+## Positional Insert
+
+**Status**: ✅ STABLE
+
+Special patterns for inserting content at document positions without matching existing text:
+
+Pattern | Meaning | Status
+--- | --- | ---
+`^$` | Empty document only | REQUIRED
+`^` | Beginning of document (prepend) | REQUIRED
+`$` | End of document (append) | REQUIRED
+
+When used as the pattern in a SEDMAT expression, these bypass regex matching and instead insert the replacement at the specified position.
+
+### Behavior
+
+- `^$` — Implementations MUST check that the document body is empty (no non-whitespace content). If the document is not empty, the expression MUST be a no-op (0 replacements).
+- `^` — Implementations MUST insert the replacement at the beginning of the document body (index 1).
+- `$` — Implementations MUST insert the replacement at the end of the document body (before the trailing newline).
+
+### Examples
+
+```bash
+# Insert text into an empty document
+s/^$/Hello world/
+
+# Prepend title to any document
+s/^/Document Title\n/
+
+# Append footer
+s/$/\nGenerated on 2026-02-09/
+
+# Create a table in an empty document
+s/^$/|3x4|/
+
+# Prepend with formatting
+s/^/**Important Notice**\n/
+```
+
+### Interaction with Other Features
+
+Positional insert MUST support all replacement features:
+- Text formatting (`**bold**`, `*italic*`, etc.)
+- Images (`![](url)`, `!(url)`)
+- Table creation (`|RxC|`)
+- Escape sequences (`\n` for newlines)
+
+---
+
 ## Tables
 
-**Status**: PROPOSED (not yet standardized)
+**Status**: ✅ STABLE (core operations); PROPOSED (styling, merge, ranges)
 
-### Table References
+### Table References ✅
 
-Pattern | Meaning
---- | ---
-&#124;1&#124; | First table
-&#124;2&#124; | Second table
-&#124;-1&#124; | Last table
-&#124;*&#124; | All tables
+Pattern | Meaning | Status
+--- | --- | ---
+&#124;1&#124; | First table | REQUIRED
+&#124;2&#124; | Second table | REQUIRED
+&#124;-1&#124; | Last table | REQUIRED
+&#124;*&#124; | All tables | REQUIRED
 
-### Table Creation
+### Table Creation ✅
 
 ```bash
 # Create 3×4 table (3 rows, 4 columns)
 s/{{TABLE}}/|3x4|/
 
-# With header row pinning
+# With header flag
 s/{{TABLE}}/|3x4:header|/
+
+# Create table in empty document
+s/^$/|3x4|/
 ```
 
-### Cell References
+**Limits**: Implementations SHOULD support 1–100 rows and 1–26 columns.
+
+### Table Deletion ✅
+
+```bash
+# Delete first table
+s/|1|//
+
+# Delete last table
+s/|-1|//
+
+# Delete all tables
+s/|*|//
+```
+
+When the pattern is a bare table reference (`|N|`, `|-N|`, or `|*|`) and the replacement is empty, implementations MUST delete the referenced table(s) from the document.
+
+### Cell References ✅
 
 ```mermaid
 graph TB
     subgraph "Cell Reference Syntax"
         A["[A1]<br/>Excel-style"] 
         B["[1,1]<br/>Row,Col (1-indexed)"]
-        C["[0,0]<br/>Row,Col (0-indexed)"]
-        D["[A1:C3]<br/>Range"]
+        D["[A1:C3]<br/>Range 🔮"]
         E["[1,*]<br/>Entire row"]
         F["[*,2]<br/>Entire column"]
         G["[*,*]<br/>All cells"]
     end
 ```
 
-Pattern | Meaning
---- | ---
-&#124;1&#124;[A1] | Cell A1 (Excel-style)
-&#124;1&#124;[1,1] | Row 1, Col 1 (1-indexed)
-&#124;1&#124;[A1:C3] | Range A1 to C3
-&#124;1&#124;[1,*] | Entire row 1
-&#124;1&#124;[*,2] | Entire column 2
-&#124;1&#124;[*,*] | All cells
+Pattern | Meaning | Status
+--- | --- | ---
+&#124;1&#124;[A1] | Cell A1 (Excel-style) | ✅ STABLE
+&#124;1&#124;[1,1] | Row 1, Col 1 (1-indexed) | ✅ STABLE
+&#124;1&#124;[1,*] | Entire row 1 (wildcard) | ✅ STABLE
+&#124;1&#124;[*,2] | Entire column 2 (wildcard) | ✅ STABLE
+&#124;1&#124;[*,*] | All cells | ✅ STABLE
+&#124;1&#124;[A1:C3] | Range A1 to C3 | 🔮 PROPOSED
+
+**Wildcard Behavior**: When `*` is used for the row or column component, implementations MUST iterate over all matching cells in the table and apply the replacement to each.
 
 **Examples:**
 
@@ -391,33 +461,80 @@ s/|1|[B1]/Value/
 # Bold existing cell content (& = matched content)
 s/|1|[A1]/**&**/
 
-# Format entire header row
-s/|1|[1,*]/**&**/g
+# Bold entire header row (wildcard)
+s/|1|[1,*]/**&**/
 
-# Find/replace within table
+# Replace all cells in a column
+s/|1|[*,3]/---/
+
+# Find/replace within specific cell (sub-pattern after colon)
+s/|1|[A1]:old/new/
+
+# Find/replace across entire table
 s/|1|[*,*]:TODO/DONE/g
+
+# Find/replace within a column
+s/|1|[*,1]:N\/A/-/g
 ```
 
-### Row and Column Operations
+### Row Operations ✅
+
+Pattern | Meaning | Status
+--- | --- | ---
+&#124;1&#124;[row:2] | Delete row 2 | ✅ STABLE
+&#124;1&#124;[row:-1] | Delete last row | ✅ STABLE
+&#124;1&#124;[row:+2] | Insert row before row 2 | ✅ STABLE
+&#124;1&#124;[row:$+] | Append row at end | ✅ STABLE
 
 ```bash
 # Delete row 2
 s/|1|[row:2]//
+
+# Delete last row
+s/|1|[row:-1]//
 
 # Insert row before row 2
 s/|1|[row:+2]//
 
 # Append row at end
 s/|1|[row:$+]//
-
-# Delete column B
-s/|1|[col:B]//
-
-# Set column width (points)
-s/|1|[col:A]/width=100/
 ```
 
-### Cell Styling
+**Semantics:**
+- `[row:N]` with empty replacement → delete row N
+- `[row:+N]` with empty replacement → insert empty row before row N
+- `[row:$+]` → append empty row at end
+- Negative indices count from the end (`-1` = last row)
+- Implementations MUST NOT allow deleting the only row in a table
+
+### Column Operations ✅
+
+Pattern | Meaning | Status
+--- | --- | ---
+&#124;1&#124;[col:2] | Delete column 2 | ✅ STABLE
+&#124;1&#124;[col:-1] | Delete last column | ✅ STABLE
+&#124;1&#124;[col:+2] | Insert column before column 2 | ✅ STABLE
+&#124;1&#124;[col:$+] | Append column at end | ✅ STABLE
+
+```bash
+# Delete column 2
+s/|1|[col:2]//
+
+# Delete last column
+s/|1|[col:-1]//
+
+# Insert column before column 2
+s/|1|[col:+2]//
+
+# Append column at end
+s/|1|[col:$+]//
+```
+
+**Semantics:**
+- Same conventions as row operations
+- Implementations MUST NOT allow deleting the only column in a table
+
+### Cell Styling — 🔮 PROPOSED
 
 ```bash
 # Background color
@@ -555,8 +672,18 @@ dimensions     = "{" *( dim-spec SP ) "}"
 dim-spec       = ("width" / "w") "=" NUMBER
                / ("height" / "h") "=" NUMBER
 
-table-ref      = "|" index "|"
+positional-pat = "^$" / "^" / "$"      ; Positional insert patterns
+
+table-ref      = "|" index "|"          ; Table reference (|1|, |-1|, |*|)
+table-create   = "|" rows "x" cols [":header"] "|"
+
 cell-ref       = table-ref "[" cell-spec "]"
+cell-spec      = excel-ref / row-col / wildcard-ref / row-op / col-op
+excel-ref      = ALPHA+ DIGIT+         ; A1, B2, AA10
+row-col        = (DIGIT+ / "*") "," (DIGIT+ / "*")
+wildcard-ref   = "*" "," "*"
+row-op         = "row:" ("+" DIGIT+ / "$+" / ["-"] DIGIT+)
+col-op         = "col:" ("+" DIGIT+ / "$+" / ["-"] DIGIT+)
 ```
 
 ## Implementation Status
@@ -575,10 +702,16 @@ Image dimensions | ✅ Stable | REQUIRED
 Image reference `!(n)` | ✅ Stable | REQUIRED
 Image alt regex `![regex]` | ✅ Stable | REQUIRED
 Native regex mode | ✅ Stable | RECOMMENDED
-Table creation | 🔮 Proposed | OPTIONAL
-Table cell operations | 🔮 Proposed | OPTIONAL
-Table row/column ops | 🔮 Proposed | OPTIONAL
-Table styling | 🔮 Proposed | OPTIONAL
+Positional insert (`^$`, `^`, `$`) | ✅ Stable | REQUIRED
+Table creation (`\|RxC\|`) | ✅ Stable | REQUIRED
+Table deletion (`\|N\|`, `\|*\|`) | ✅ Stable | REQUIRED
+Cell references (`[A1]`, `[R,C]`) | ✅ Stable | REQUIRED
+Cell wildcards (`[1,*]`, `[*,2]`, `[*,*]`) | ✅ Stable | REQUIRED
+Row operations (insert/delete/append) | ✅ Stable | REQUIRED
+Column operations (insert/delete/append) | ✅ Stable | REQUIRED
+Range references (`[A1:C3]`) | 🔮 Proposed | OPTIONAL
+Table cell styling | 🔮 Proposed | OPTIONAL
+Cell merge/unmerge | 🔮 Proposed | OPTIONAL
 @ mentions | 🔮 Proposed | OPTIONAL
 
 ## Complete Examples
@@ -638,10 +771,23 @@ s/{{PRICING}}/|4x3|/
 s/|1|[A1]/**Plan**/
 s/|1|[B1]/**Monthly**/
 s/|1|[C1]/**Annual**/
-s/|1|[1,*]/bg=#4a86e8/
+s/|1|[1,*]/**&**/              # Bold entire header row
 s/|1|[A2]/Basic/
 s/|1|[A3]/Pro/
 s/|1|[A4]/Enterprise/
+
+# Add a new row at the end
+s/|1|[row:$+]//
+s/|1|[A5]/Custom/
+
+# Delete column 3
+s/|1|[col:3]//
+
+# Create table in empty document
+s/^$/|3x3|/
+
+# Delete all tables
+s/|*|//
 ```
 
 ### Batch Operations Pipeline
@@ -694,11 +840,23 @@ Circular reference | MUST detect and reject
 - Image references: `!(n)`, `!(-n)`, `!(*)`
 - Alt-text matching: `![regex]`
 
-### Level 3: Advanced (OPTIONAL)
+### Level 3: Structural (REQUIRED)
 
 - All Level 2 features
-- Table operations
-- Cell references and styling
+- Positional insert: `^$`, `^`, `$`
+- Table creation: `|RxC|`, `|RxC:header|`
+- Table deletion: `|N|`, `|-N|`, `|*|`
+- Cell references: `[A1]`, `[R,C]`
+- Cell wildcards: `[1,*]`, `[*,2]`, `[*,*]`
+- Row operations: `[row:N]`, `[row:+N]`, `[row:$+]`
+- Column operations: `[col:N]`, `[col:+N]`, `[col:$+]`
+
+### Level 4: Advanced (OPTIONAL)
+
+- All Level 3 features
+- Range references (`[A1:C3]`)
+- Cell styling (`bg=`, `border=`)
+- Cell merge/unmerge
 - @ mentions
 - Extended flags
 
@@ -712,41 +870,66 @@ Circular reference | MUST detect and reject
 ## Appendix A: Quick Reference Card
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     SEDMAT Quick Reference                       │
-├─────────────────────────────────────────────────────────────────┤
-│ BASIC SYNTAX                                                     │
-│   s/pattern/replacement/     Replace first match                │
-│   s/pattern/replacement/g    Replace all matches                │
-├─────────────────────────────────────────────────────────────────┤
-│ FORMATTING                                                       │
-│   **text**    Bold          *text*     Italic                   │
-│   ~~text~~    Strike        `text`     Monospace                │
-│   __text__    Underline     ***text*** Bold+Italic              │
-├─────────────────────────────────────────────────────────────────┤
-│ BACK-REFERENCES                                                  │
-│   $1-$9       Capture groups    &       Entire match            │
-├─────────────────────────────────────────────────────────────────┤
-│ LINKS                                                            │
-│   [text](url)               Hyperlink                           │
-│   <url>                     Auto-link                           │
-├─────────────────────────────────────────────────────────────────┤
-│ IMAGES                                                           │
-│   ![alt](url)               Insert image                        │
-│   !(url)                    Insert (shorthand)                  │
-│   {width=N}                 Set width                           │
-│   !(1), !(-1), !(*)         Reference by position               │
-│   ![regex]                  Reference by alt text               │
-├─────────────────────────────────────────────────────────────────┤
-│ TABLES (Proposed)                                                │
-│   |3x4|                     Create 3-row, 4-col table           │
-│   |1|[A1]                   Cell reference                      │
-│   |1|[1,*]                  Row reference                       │
-│   |1|[*,1]                  Column reference                    │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                      SEDMAT Quick Reference                       │
+├──────────────────────────────────────────────────────────────────┤
+│ BASIC SYNTAX                                                      │
+│   s/pattern/replacement/     Replace first match                  │
+│   s/pattern/replacement/g    Replace all matches                  │
+├──────────────────────────────────────────────────────────────────┤
+│ FORMATTING                                                        │
+│   **text**    Bold          *text*      Italic                    │
+│   ~~text~~    Strike        `text`      Monospace                 │
+│   __text__    Underline     ***text***  Bold+Italic               │
+├──────────────────────────────────────────────────────────────────┤
+│ BACK-REFERENCES                                                   │
+│   $1-$9       Capture groups    &       Entire match              │
+├──────────────────────────────────────────────────────────────────┤
+│ LINKS                                                             │
+│   [text](url)               Hyperlink                             │
+│   <url>                     Auto-link                             │
+├──────────────────────────────────────────────────────────────────┤
+│ IMAGES                                                            │
+│   ![alt](url)               Insert image                         │
+│   !(url)                    Insert (shorthand)                    │
+│   {width=N}                 Set width                             │
+│   !(1), !(-1), !(*)         Reference by position                 │
+│   ![regex]                  Reference by alt text                 │
+├──────────────────────────────────────────────────────────────────┤
+│ POSITIONAL INSERT                                                 │
+│   s/^$/text/                Insert into empty document            │
+│   s/^/text/                 Prepend to document                   │
+│   s/$/text/                 Append to document                    │
+├──────────────────────────────────────────────────────────────────┤
+│ TABLES                                                            │
+│   |3x4|                     Create 3-row, 4-col table             │
+│   |1|, |-1|, |*|            Table reference / delete              │
+│   |1|[A1]                   Cell reference (Excel-style)          │
+│   |1|[1,2]                  Cell reference (row,col)              │
+│   |1|[1,*]                  Entire row (wildcard)                 │
+│   |1|[*,2]                  Entire column (wildcard)              │
+│   |1|[*,*]                  All cells                             │
+│   |1|[row:+2]               Insert row before row 2              │
+│   |1|[row:$+]               Append row at end                    │
+│   |1|[row:2]                Delete row 2                          │
+│   |1|[col:+2]               Insert column before col 2           │
+│   |1|[col:$+]               Append column at end                 │
+│   |1|[col:2]                Delete column 2                       │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ## Changelog
+
+### v1.1 (2026-02-09)
+- **Positional insert**: Added `^$`, `^`, `$` patterns for document-level insertion (prepend, append, empty doc)
+- **Table creation**: Promoted to STABLE — `|RxC|` and `|RxC:header|` syntax
+- **Table deletion**: Added `s/|N|//`, `s/|-N|//`, `s/|*|//` for removing tables
+- **Cell wildcards**: Added `[1,*]` (row), `[*,2]` (column), `[*,*]` (all cells)
+- **Row operations**: Added `[row:N]` (delete), `[row:+N]` (insert before), `[row:$+]` (append)
+- **Column operations**: Added `[col:N]` (delete), `[col:+N]` (insert before), `[col:$+]` (append)
+- Updated conformance levels: Level 3 (Structural) now REQUIRED
+- Updated ABNF grammar with positional patterns, table creation, row/col operations
+- Reference implementation: [gogcli](https://github.com/steipete/gogcli) `gog docs sed`
 
 ### v1.0 (2026-02-07)
 - Initial specification
