@@ -53,6 +53,7 @@ s/{{LOGO}}/![](https://example.com/logo.png)/
 ### Expression Anatomy
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
 graph LR
     subgraph "SEDMAT Expression"
         CMD[s] --> SEP1["/"]
@@ -63,15 +64,16 @@ graph LR
         SEP3 --> FLAGS["flags"]
     end
     
-    style CMD fill:#e1f5e1
-    style PAT fill:#fff4e1
-    style REP fill:#e1e8f5
-    style FLAGS fill:#f5e1e8
+    style CMD fill:#2d5a2d,color:#ffffff
+    style PAT fill:#5a4a2d,color:#ffffff
+    style REP fill:#2d3a5a,color:#ffffff
+    style FLAGS fill:#5a2d3a,color:#ffffff
 ```
 
 ### Processing Model
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
 flowchart TB
     INPUT[Input Document] --> PARSE[Parse Expression]
     PARSE --> HASFORMAT{Contains<br/>Formatting?}
@@ -80,8 +82,8 @@ flowchart TB
     NATIVE --> OUTPUT[Output Document]
     WALK --> OUTPUT
     
-    style NATIVE fill:#90ee90
-    style WALK fill:#fff4e1
+    style NATIVE fill:#2d5a2d,color:#ffffff
+    style WALK fill:#5a4a2d,color:#ffffff
 ```
 
 SEDMAT processors SHOULD detect plain-text replacements and use native regex APIs for optimal performance.
@@ -160,14 +162,15 @@ s/urgent/***__urgent__***/
 **Processing Order:**
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
 graph LR
     TEXT[text] --> U["__underline__"]
     U --> B["**bold**"]
     B --> I["*italic*"]
     I --> FINAL["***__text__***"]
     
-    style TEXT fill:#f0f0f0
-    style FINAL fill:#e1f5e1
+    style TEXT fill:#505050,color:#ffffff
+    style FINAL fill:#2d5a2d,color:#ffffff
 ```
 
 Implementations MUST process nesting from innermost to outermost.
@@ -225,10 +228,11 @@ s/RFC 2119/[RFC 2119](https:\/\/datatracker.ietf.org\/doc\/html\/rfc2119 "IETF R
 ### Link Processing Flow
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
 flowchart LR
     MATCH[Match Text] --> HASURL{URL in<br/>Replacement?}
-    HASURL -->|"[text](url)"| HYPER[Create Hyperlink]
-    HASURL -->|"<url>"| AUTO[Create Auto-link]
+    HASURL -->|"#91;text#93;#40;url#41;"| HYPER[Create Hyperlink]
+    HASURL -->|"#60;url#62;"| AUTO[Create Auto-link]
     HASURL -->|No| PLAIN[Plain Text Replace]
     
     HYPER --> OUT[Output]
@@ -282,12 +286,13 @@ Pattern | Meaning | Status
 **Reference Resolution:**
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
 graph TB
     REF["Image Reference"] --> TYPE{Reference<br/>Type?}
-    TYPE -->|"!(n)"| POS[Position-based<br/>1-indexed]
-    TYPE -->|"!(-n)"| NEG[Negative index<br/>From end]
-    TYPE -->|"!(*)"| ALL[All images]
-    TYPE -->|"![regex]"| ALT[Alt-text<br/>regex match]
+    TYPE -->|"!#40;n#41;"| POS[Position-based<br/>1-indexed]
+    TYPE -->|"!#40;-n#41;"| NEG[Negative index<br/>From end]
+    TYPE -->|"!#40;*#41;"| ALL[All images]
+    TYPE -->|"!#91;regex#93;"| ALT[Alt-text<br/>regex match]
     
     POS --> RESOLVE[Resolve to Image]
     NEG --> RESOLVE
@@ -429,14 +434,15 @@ When the pattern is a bare table reference (`|N|`, `|-N|`, or `|*|`) and the rep
 ### Cell References ✅
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
 graph TB
     subgraph "Cell Reference Syntax"
-        A["[A1]<br/>Excel-style"] 
-        B["[1,1]<br/>Row,Col (1-indexed)"]
-        D["[A1:C3]<br/>Range 🔮"]
-        E["[1,*]<br/>Entire row"]
-        F["[*,2]<br/>Entire column"]
-        G["[*,*]<br/>All cells"]
+        A["#91;A1#93;<br/>Excel-style"] 
+        B["#91;1,1#93;<br/>Row,Col 1-indexed"]
+        D["#91;A1:C3#93;<br/>Range 🔮"]
+        E["#91;1,*#93;<br/>Entire row"]
+        F["#91;*,2#93;<br/>Entire column"]
+        G["#91;*,*#93;<br/>All cells"]
     end
 ```
 
@@ -591,19 +597,20 @@ s/{{IMG}}/!(https:\/\/img.png)/        # Image
 ```
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
 flowchart TB
     EXPR[Expression] --> ANALYZE{Analyze<br/>Replacement}
-    ANALYZE -->|Plain text only| NATIVE["Native Regex<br/>(Fast)"]
-    ANALYZE -->|Contains **,*,~~,etc| WALK["Document Walk<br/>(Full features)"]
-    ANALYZE -->|Contains [](url)| WALK
-    ANALYZE -->|Contains !()| WALK
-    ANALYZE -->|Contains \|table\|| WALK
+    ANALYZE -->|Plain text only| NATIVE["Native Regex<br/>#40;Fast#41;"]
+    ANALYZE -->|Contains formatting markers| WALK["Document Walk<br/>#40;Full features#41;"]
+    ANALYZE -->|Contains link syntax| WALK
+    ANALYZE -->|Contains image syntax| WALK
+    ANALYZE -->|Contains table syntax| WALK
     
     NATIVE --> APPLY[Apply Changes]
     WALK --> APPLY
     
-    style NATIVE fill:#90ee90
-    style WALK fill:#fff4e1
+    style NATIVE fill:#2d5a2d,color:#ffffff
+    style WALK fill:#5a4a2d,color:#ffffff
 ```
 
 ## Escaping
@@ -793,15 +800,16 @@ s/|*|//
 ### Batch Operations Pipeline
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
 flowchart LR
     DOC[Original<br/>Document] --> E1["s/{{NAME}}/Acme/"]
     E1 --> E2["s/DRAFT/**DRAFT**/g"]
-    E2 --> E3["s/!(1)/!(logo.png)/"]
-    E3 --> E4["s/(https://\\S+)/<$1>/g"]
+    E2 --> E3["s/!#40;1#41;/!#40;logo.png#41;/"]
+    E3 --> E4["s/#40;https://\\S+#41;/#60;$1#62;/g"]
     E4 --> OUT[Transformed<br/>Document]
     
-    style DOC fill:#f0f0f0
-    style OUT fill:#e1f5e1
+    style DOC fill:#505050,color:#ffffff
+    style OUT fill:#2d5a2d,color:#ffffff
 ```
 
 ## Error Handling
