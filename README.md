@@ -53,7 +53,7 @@ s/{{LOGO}}/![](https://example.com/logo.png)/
 ### Expression Anatomy
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222', 'clusterBkg': '#1a1a1a', 'clusterBorder': '#444444' }}}%%
 graph LR
     subgraph "SEDMAT Expression"
         CMD[s] --> SEP1["/"]
@@ -64,16 +64,16 @@ graph LR
         SEP3 --> FLAGS["flags"]
     end
     
-    style CMD fill:#2d5a2d,color:#ffffff
-    style PAT fill:#5a4a2d,color:#ffffff
-    style REP fill:#2d3a5a,color:#ffffff
-    style FLAGS fill:#5a2d3a,color:#ffffff
+    style CMD fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
+    style PAT fill:#4a3a1a,color:#ffffff,stroke:#7a5a2a
+    style REP fill:#1a2a4a,color:#ffffff,stroke:#2a4a7a
+    style FLAGS fill:#4a1a3a,color:#ffffff,stroke:#7a2a5a
 ```
 
 ### Processing Model
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
 flowchart TB
     INPUT[Input Document] --> PARSE[Parse Expression]
     PARSE --> HASFORMAT{Contains<br/>Formatting?}
@@ -82,8 +82,8 @@ flowchart TB
     NATIVE --> OUTPUT[Output Document]
     WALK --> OUTPUT
     
-    style NATIVE fill:#2d5a2d,color:#ffffff
-    style WALK fill:#5a4a2d,color:#ffffff
+    style NATIVE fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
+    style WALK fill:#4a3a1a,color:#ffffff,stroke:#7a5a2a
 ```
 
 SEDMAT processors SHOULD detect plain-text replacements and use native regex APIs for optimal performance.
@@ -162,15 +162,15 @@ s/urgent/***__urgent__***/
 **Processing Order:**
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
 graph LR
     TEXT[text] --> U["__underline__"]
     U --> B["**bold**"]
     B --> I["*italic*"]
     I --> FINAL["***__text__***"]
     
-    style TEXT fill:#505050,color:#ffffff
-    style FINAL fill:#2d5a2d,color:#ffffff
+    style TEXT fill:#2a2a2a,color:#ffffff,stroke:#555555
+    style FINAL fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
 ```
 
 Implementations MUST process nesting from innermost to outermost.
@@ -228,7 +228,7 @@ s/RFC 2119/[RFC 2119](https:\/\/datatracker.ietf.org\/doc\/html\/rfc2119 "IETF R
 ### Link Processing Flow
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
 flowchart LR
     MATCH[Match Text] --> HASURL{URL in<br/>Replacement?}
     HASURL -->|"#91;text#93;#40;url#41;"| HYPER[Create Hyperlink]
@@ -286,7 +286,7 @@ Pattern | Meaning | Status
 **Reference Resolution:**
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
 graph TB
     REF["Image Reference"] --> TYPE{Reference<br/>Type?}
     TYPE -->|"!#40;n#41;"| POS[Position-based<br/>1-indexed]
@@ -434,7 +434,7 @@ When the pattern is a bare table reference (`|N|`, `|-N|`, or `|*|`) and the rep
 ### Cell References ✅
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222', 'clusterBkg': '#1a1a1a', 'clusterBorder': '#444444' }}}%%
 graph TB
     subgraph "Cell Reference Syntax"
         A["#91;A1#93;<br/>Excel-style"] 
@@ -597,7 +597,7 @@ s/{{IMG}}/!(https:\/\/img.png)/        # Image
 ```
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
 flowchart TB
     EXPR[Expression] --> ANALYZE{Analyze<br/>Replacement}
     ANALYZE -->|Plain text only| NATIVE["Native Regex<br/>#40;Fast#41;"]
@@ -609,8 +609,8 @@ flowchart TB
     NATIVE --> APPLY[Apply Changes]
     WALK --> APPLY
     
-    style NATIVE fill:#2d5a2d,color:#ffffff
-    style WALK fill:#5a4a2d,color:#ffffff
+    style NATIVE fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
+    style WALK fill:#4a3a1a,color:#ffffff,stroke:#7a5a2a
 ```
 
 ## Escaping
@@ -800,7 +800,7 @@ s/|*|//
 ### Batch Operations Pipeline
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#404040', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#666666', 'lineColor': '#888888', 'secondaryColor': '#505050', 'tertiaryColor': '#333333', 'background': '#1a1a1a' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
 flowchart LR
     DOC[Original<br/>Document] --> E1["s/{{NAME}}/Acme/"]
     E1 --> E2["s/DRAFT/**DRAFT**/g"]
@@ -808,8 +808,8 @@ flowchart LR
     E3 --> E4["s/#40;https://\\S+#41;/#60;$1#62;/g"]
     E4 --> OUT[Transformed<br/>Document]
     
-    style DOC fill:#505050,color:#ffffff
-    style OUT fill:#2d5a2d,color:#ffffff
+    style DOC fill:#2a2a2a,color:#ffffff,stroke:#555555
+    style OUT fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
 ```
 
 ## Error Handling
