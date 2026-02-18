@@ -1,6 +1,6 @@
 # SEDMAT: Sed-Expression-Driven Markdown Annotation & Transformation
 
-**Version**: 3.4  
+**Version**: 3.5  
 **Last Updated**: 2026-02-18  
 **Status**: Draft
 
@@ -290,6 +290,7 @@ Boolean flags are activated by presence alone. No `=y` is needed.
 | `^` | `sup` | Superscript (entire replacement) |
 | `,` | `sub` | Subscript (entire replacement) |
 | `w` | `smallcaps` | Small caps |
+| `check` | — | Checkbox (tri-state: absent/`=n`/`=y`) |
 
 **Examples:**
 
@@ -402,7 +403,7 @@ Value flags use `key=value` syntax. When a value flag appears **bare** (without 
 | Short | Long | Default (bare) | Effect |
 |-------|------|----------------|--------|
 | `t` | `text` | `$0` (matched text) | Replacement text |
-| `c` | `color` | black | Text color |
+| `c` | `color` | black | Text color (hex or named) |
 | `z` | `bg` | clear | Background/highlight color |
 | `f` | `font` | Arial | Font family |
 | `s` | `size` | 11pt | Font size in points |
@@ -415,9 +416,10 @@ Value flags use `key=value` syntax. When a value flag appears **bare** (without 
 | `k` | `kerning` | 0 | Letter spacing |
 | `x` | `width` | — | Width in pixels |
 | `y` | `height` | — | Height in pixels |
-| `p` | `spacing` | — | Paragraph spacing above/below |
+| `p` | `spacing` | default | Paragraph spacing above/below (pt or above,below) |
 | `e` | `effect` | — | Shadow/glow/blur |
 | `cols` | — | 1 | Number of columns in containing section |
+| `toc` | — | — | Insert table of contents (optional `=N` for max depth) |
 
 **Examples:**
 
@@ -433,6 +435,36 @@ s/caption/{s=9 i}/g
 
 # Combined
 s/CRITICAL/{b c=red z=yellow s=14}/g
+```
+
+### Named Colors ✅ STABLE
+
+SEDMAT defines a standard named color palette for the `c=` (color) and `z=` (background) flags. Implementations MUST support hex notation (`#RRGGBB`). Named colors are RECOMMENDED.
+
+| Name | Hex | Name | Hex |
+|------|-----|------|-----|
+| `black` | #000000 | `white` | #FFFFFF |
+| `red` | #FF0000 | `green` | #00FF00 |
+| `blue` | #0000FF | `yellow` | #FFFF00 |
+| `cyan` | #00FFFF | `magenta` | #FF00FF |
+| `orange` | #FF8C00 | `purple` | #800080 |
+| `pink` | #FF69B4 | `brown` | #8B4513 |
+| `gray` / `grey` | #808080 | `lightgray` | #D3D3D3 |
+| `darkgray` | #404040 | `navy` | #000080 |
+| `teal` | #008080 | | |
+
+**Examples:**
+
+```bash
+# These are equivalent:
+s/error/{c=red}/g
+s/error/{c=#FF0000}/g
+
+# Named colors for readability
+s/warning/{c=orange z=yellow}/g
+s/info/{c=navy}/g
+s/success/{c=green b}/g
+s/muted/{c=gray}/g
 ```
 
 ### Reset: `{0}` ✅ STABLE
@@ -479,6 +511,34 @@ s/heading text/{h}/g          # Apply default heading (HEADING_1)
 s/normal paragraph/{h=0}/g    # Reset to normal text
 ```
 
+### Paragraph Spacing: `{p=}` ✅ STABLE
+
+The `p` flag controls paragraph spacing (space above and below the paragraph).
+
+| Syntax | Effect |
+|--------|--------|
+| `{p=12}` | 12pt spacing both above and below |
+| `{p=12,6}` | 12pt above, 6pt below (comma-separated) |
+| `{p=0}` | No spacing (tight paragraphs) |
+| `{p=0,12}` | No spacing above, 12pt below |
+| `{p}` (bare) | Reset to default spacing |
+
+**Examples:**
+
+```bash
+# Tight title with space below
+s/Title/{h=1 p=0,24}/g
+
+# Generous spacing for readability
+s/Section/{h=2 p=24,12}/g
+
+# No spacing for compact lists
+s/item/{p=0}/g
+
+# Reset to defaults
+s/paragraph/{p}/g
+```
+
 ### Superscript and Subscript ✅ STABLE
 
 SEDMAT provides boolean flags for super/subscript with inline scoping support.
@@ -501,12 +561,11 @@ Use `{^=text}` and `{,=text}` to apply super/subscript to just part of the repla
 # Chemistry
 s/H2O/H{,=2}O/g               # H₂O
 s/CO2/CO{,=2}/g               # CO₂
-s/C6H12O6/C{,=6}H{,=12}O{,=6}/g  # C₆H₁₂O₆
+s/H2SO4/H{,=2}SO{,=4}/g       # H₂SO₄
 
 # Math
 s/E=mc2/E=mc{^=2}/g           # E=mc²
 s/x2\+y2=z2/x{^=2}+y{^=2}=z{^=2}/g  # x²+y²=z²
-s/a2\+b2=c2/a{^=2}+b{^=2}=c{^=2}/g  # Pythagorean theorem
 
 # Ordinals
 s/1st/1{^=st}/g               # 1ˢᵗ
@@ -547,115 +606,119 @@ s/SECTION_END/{+=s}/g         # Section break
 
 ### Columns: `{cols=N}` ✅ STABLE
 
-The `cols=` flag is a **structural flag** that sets the number of columns in the section containing the match. Unlike text flags that format the matched text itself, `cols=` uses the match as a **locator** to identify which section to modify.
+The `cols=` flag is a **structural flag** that sets the number of columns in the section containing the match. The matched text acts as a **locator** to identify which section to modify.
 
-#### How It Works
-
-- `{cols=2}` — Sets the containing section to 2 columns
-- `{cols=1}` — Returns to single column layout
-- `{cols=3}` — Three-column layout (etc.)
-- `{cols}` (bare) — Resets to 1 column (default)
-
-The matched text still receives any text formatting flags in the same group, while `cols=` separately modifies the section structure.
+| Syntax | Effect |
+|--------|--------|
+| `{cols=2}` | 2-column layout |
+| `{cols=1}` | Single column (default) |
+| `{cols=3}` | 3-column layout |
+| `{cols}` (bare) | Reset to 1 column |
 
 #### Structural vs Text Flags
 
-Most SEDMAT flags target the matched **text range** (bold, color, font, etc.). Structural flags target the **containing section** or document:
-
 | Flag Type | Target | Examples |
 |-----------|--------|----------|
-| Text flags | Matched text range | `{b}`, `{c=red}`, `{h=1}`, `{f=Arial}` |
+| Text flags | Matched text range | `{b}`, `{c=red}`, `{h=1}` |
 | Structural flags | Containing section | `{cols=2}`, `{+=s}`, `{+=p}` |
 
-Both flag types coexist in the same `{}` group. Implementations apply each flag to its appropriate scope:
+Both coexist in the same `{}` group:
 
 ```bash
-# h=1 and b apply to the text "Chapter"
-# cols=2 applies to the section containing "Chapter"
+# h=1 and b apply to text; cols=2 applies to section
 s/Chapter/{h=1 b cols=2}/g
 ```
 
 #### Pairing with Section Breaks
 
-Columns pair naturally with section breaks. To start a new section with a different column count:
-
 ```bash
-# Insert section break, then set new section to 2 columns
+# Section break + set new section to 2 columns
 s/NEWSLETTER_START/{+=s cols=2}/g
 
-# Return to single column for the footer
+# Return to single column for footer
 s/FOOTER_START/{+=s cols=1}/g
 ```
 
-The `{+=s cols=2}` pattern:
-1. Inserts a section break after the match
-2. Sets the **new section** (after the break) to 2 columns
-
 #### Column Breaks
-
-Use `{+=c}` to insert a column break within a multi-column section:
 
 ```bash
 # Force content to next column
 s/NEXT_COLUMN/{+=c}/g
 ```
 
-#### Deduplication
-
-When multiple matches target the same section, implementations SHOULD deduplicate column settings. The last `cols=` value in document order wins:
+#### Example: Newsletter Layout
 
 ```bash
-# If both matches are in the same section, cols=3 wins
-s/first match/{cols=2}/g
-s/second match/{cols=3}/g
-```
-
-#### Examples
-
-**Newsletter layout:**
-```bash
-# Title in single column
 s/^/{h=t t=Monthly Newsletter}\n/
-
-# Switch to 2-column layout for articles
-s/ARTICLES_START/{+=s cols=2}/g
-
-# Column break between articles
+s/ARTICLES/{+=s cols=2 h=2 t=Articles}/g
 s/ARTICLE_BREAK/{+=c}/g
-
-# Back to single column for footer
-s/FOOTER/{+=s cols=1}/g
+s/FOOTER/{+=s cols=1 h=2 t=Contact}/g
 ```
 
-**Three-column directory:**
+### Checkboxes: `{check}` ✅ STABLE
+
+The `check` flag creates native checklist items (Google Docs checkboxes). Unlike other boolean flags, `check` has **tri-state semantics**:
+
+| Syntax | Effect |
+|--------|--------|
+| (absent) | No checkbox |
+| `{check}` or `{check=n}` | Unchecked checkbox ☐ |
+| `{check=y}` | Checked checkbox ☑ |
+
+**Examples:**
+
 ```bash
-# Set up 3-column section for names
-s/DIRECTORY_START/{+=s cols=3 h=2 t=Staff Directory}/g
+# Convert TODO markers to unchecked checkboxes
+s/TODO/{check=n}/g
 
-# Each department starts a new column
-s/DEPT_BREAK/{+=c}/g
+# Convert DONE markers to checked checkboxes
+s/DONE/{check=y}/g
+
+# Checkbox + bold
+s/task/{check=n b}/g
+
+# Build a checklist from placeholders
+s/\[ \]/{check=n}/g
+s/\[x\]/{check=y}/g
 ```
 
-**Combining with text formatting:**
+#### Batch Checklist Creation
+
 ```bash
-# Heading + bold on text, 2 columns on section
-s/Chapter 1/{h=1 b cols=2}/g
+# Transform a list into a checklist
+s/- pending/{check=n t=pending}/g
+s/- complete/{check=y t=complete}/g
 
-# The matched "Chapter 1" becomes a Heading 1 in bold
-# The section containing it becomes 2-column layout
+# Add checkbox to all list items
+s/^- (.+)/{check=n t=$1}/gm
 ```
 
-**Switching column counts:**
+### Table of Contents: `{toc}` ✅ STABLE
+
+The `toc` flag inserts a table of contents generated from document headings (h=1 through h=6).
+
+| Syntax | Effect |
+|--------|--------|
+| `{toc}` | Full TOC (all heading levels) |
+| `{toc=N}` | TOC with max depth N |
+
+**Examples:**
+
 ```bash
-# Introduction: single column
-s/Introduction/{h=1 cols=1}/g
+# Insert TOC at placeholder
+s/{{TOC}}/{toc}/
 
-# Main content: two columns
-s/Main Content/{h=1 cols=2}/g
+# Prepend TOC to document
+s/^/{toc}\n/
 
-# Appendix: three columns for reference tables
-s/Appendix/{h=1 cols=3}/g
+# TOC with only h1 and h2
+s/{{TOC}}/{toc=2}/
+
+# TOC after title
+s/Introduction/{toc}\n\nIntroduction/
 ```
+
+Implementations SHOULD auto-link TOC entries to their corresponding headings.
 
 ### Comments: `{"=text}` ✅ STABLE
 
@@ -809,6 +872,15 @@ s/SECTION/{+=s}/g
 s/NEWSLETTER/{+=s cols=2}/g   # Section break + 2 columns
 s/FOOTER/{+=s cols=1}/g       # Back to single column
 s/NEXT_COL/{+=c}/g            # Column break
+
+# Checkboxes
+s/TODO/{check=n}/g            # Unchecked
+s/DONE/{check=y}/g            # Checked
+s/task/{check=n b}/g          # Checkbox + bold
+
+# Table of contents
+s/{{TOC}}/{toc}/              # Full TOC
+s/{{TOC}}/{toc=2}/            # TOC depth 2
 
 # Comments and bookmarks
 s/TODO/{@=todo1 "=needs review b c=red}/g
@@ -1420,7 +1492,7 @@ replacement    = *( plain-text / brace-expr / format-expr / back-ref / image-exp
                    / link-expr / heading-expr / list-expr
                    / block-expr / footnote-expr )
 
-; --- Brace Syntax (v3.4) ---
+; --- Brace Syntax (v3.5) ---
 brace-expr     = "{" brace-body "}"
 brace-body     = reset-all / brace-flags
 reset-all      = "0" *( SP brace-flag )                  ; {0} or {0 b i}
@@ -1428,6 +1500,7 @@ reset-all      = "0" *( SP brace-flag )                  ; {0} or {0 b i}
 brace-flags    = brace-flag *( SP brace-flag )
 brace-flag     = bool-flag / neg-flag / value-flag / break-flag
                  / comment-flag / bookmark-flag / table-flag / image-flag
+                 / toc-flag / check-flag
 
 bool-flag      = bool-key ["=" val-value]                ; {b} or {b=text} for inline scoping
 bool-key       = "b" / "bold" / "i" / "italic" / "_" / "underline"
@@ -1435,6 +1508,10 @@ bool-key       = "b" / "bold" / "i" / "italic" / "_" / "underline"
                  / "," / "sub" / "w" / "smallcaps"
 
 neg-flag       = "!" bool-key                            ; Negation (prefix only)
+
+check-flag     = "check" ["=" ("y" / "n")]               ; Tri-state checkbox
+
+toc-flag       = "toc" ["=" DIGIT+]                      ; Table of contents with optional depth
 
 value-flag     = val-key "=" val-value
 val-key        = "t" / "text" / "c" / "color" / "z" / "bg"
@@ -1444,6 +1521,7 @@ val-key        = "t" / "text" / "c" / "color" / "z" / "bg"
                  / "y" / "height" / "p" / "spacing" / "h" / "heading"
                  / "e" / "effect" / "cols"
 val-value      = 1*(%x21-7E)                             ; Non-space printable ASCII
+spacing-value  = DIGIT+ ["," DIGIT+]                     ; Single value or above,below
 
 break-flag     = "+" ["=" break-type]
 break-type     = "p" / "c" / "s"                         ; page / column / section
@@ -1483,6 +1561,12 @@ chip-uri       = "chip://" chip-type "/" *(%x21-7E)
 chip-type      = "person" / "date" / "file" / "place"
                  / "dropdown" / "chart" / "bookmark"
 bookmark-uri   = "#" bookmark-name                        ; {u=#name}
+
+color-value    = "#" 6HEXDIG / color-name                ; #RRGGBB or named
+color-name     = "black" / "white" / "red" / "green" / "blue"
+                 / "yellow" / "cyan" / "magenta" / "orange" / "purple"
+                 / "pink" / "brown" / "gray" / "grey" / "lightgray"
+                 / "darkgray" / "navy" / "teal"
 
 ; --- Markdown Formatting (convenience layer) ---
 format-expr    = bold / italic / bold-italic / strike / mono
@@ -1537,6 +1621,7 @@ positional-pat = "^$" / "^" / "$"
 - Brace syntax: reset (`{0}`)
 - Brace syntax: implicit `t=$0` behavior
 - Brace syntax: `{h}` defaults to HEADING_1, `{h=0}` for NORMAL_TEXT
+- Brace syntax: named colors (RECOMMENDED) and hex colors (REQUIRED)
 - Back-references: `$1`-`$9`, `$0`, `&`, `$$` escaping
 - Links: `[text](url)`, `<url>`, `{u=url}`
 
@@ -1547,6 +1632,7 @@ positional-pat = "^$" / "^" / "$"
 - Image dimensions: `{x=N}`, `{y=N}`, `{x=N y=M}`
 - Image brace references: `{img=n}`, `{img=-n}`, `{img=*}`, `{img=regex}`
 - Brace syntax: heading shorthands (`{h=t}`, `{h=s}`, `{h=1}`–`{h=6}`, `{h=0}`)
+- Brace syntax: paragraph spacing (`{p=N}`, `{p=N,M}`)
 
 ### Level 3: Structural (REQUIRED)
 
@@ -1560,6 +1646,8 @@ positional-pat = "^$" / "^" / "$"
 - Table merge: `{T=1!A1:C3}/merge/`
 - Brace syntax: breaks (`{+}`, `{+=p}`, `{+=c}`, `{+=s}`)
 - Brace syntax: columns (`{cols=N}`)
+- Brace syntax: checkboxes (`{check}`, `{check=n}`, `{check=y}`)
+- Brace syntax: table of contents (`{toc}`, `{toc=N}`)
 - Brace syntax: comments (`{"=text}`)
 - Brace syntax: bookmarks (`{@=name}`, `{u=#name}`)
 
@@ -1606,10 +1694,15 @@ positional-pat = "^$" / "^" / "$"
 | Brace syntax: value flags (`c=`, `z=`, `f=`, `s=`, etc.) | ✅ Stable | REQUIRED |
 | Brace syntax: text flag (`t=`) with implicit `$0` | ✅ Stable | REQUIRED |
 | Brace syntax: reset (`{0}`) | ✅ Stable | REQUIRED |
+| Brace syntax: named colors | ✅ Stable | RECOMMENDED |
+| Brace syntax: hex colors (`#RRGGBB`) | ✅ Stable | REQUIRED |
 | Brace syntax: heading shorthands (`h=t`, `h=1`, `{h}` → HEADING_1) | ✅ Stable | REQUIRED |
 | Brace syntax: `{h=0}` for NORMAL_TEXT | ✅ Stable | REQUIRED |
+| Brace syntax: paragraph spacing (`p=N`, `p=N,M`) | ✅ Stable | REQUIRED |
 | Brace syntax: breaks (`{+}`, `{+=p}`, etc.) | ✅ Stable | REQUIRED |
 | Brace syntax: columns (`{cols=N}`) | ✅ Stable | REQUIRED |
+| Brace syntax: checkboxes (`{check}`, `{check=n}`, `{check=y}`) | ✅ Stable | REQUIRED |
+| Brace syntax: table of contents (`{toc}`, `{toc=N}`) | ✅ Stable | REQUIRED |
 | Brace syntax: comments (`{"=text}`) | ✅ Stable | REQUIRED |
 | Brace syntax: bookmarks (`{@=name}`) | ✅ Stable | REQUIRED |
 | Brace syntax: URL/link (`u=`) | ✅ Stable | REQUIRED |
@@ -1779,6 +1872,34 @@ s/SIDEBAR_START/{+=s cols=3 h=3 t=Quick Updates}/g
 s/CONTACT_US/{+=s cols=1 h=2 t=Contact Us}/g
 ```
 
+### Checklist Creation
+
+```bash
+# Convert markdown-style checkboxes
+s/\[ \]/{check=n}/g
+s/\[x\]/{check=y}/g
+
+# Create task list from placeholders
+s/TODO: (.+)/{check=n t=$1}/g
+s/DONE: (.+)/{check=y t=$1}/g
+
+# Styled checklist items
+s/ACTION: (.+)/{check=n b c=red t=$1}/g
+```
+
+### Document with Table of Contents
+
+```bash
+# Insert TOC after title
+s/^/{h=t t=User Guide}\n{toc=3}\n/
+
+# Or replace placeholder
+s/{{TABLE_OF_CONTENTS}}/{toc}/
+
+# Depth-limited TOC
+s/{{TOC}}/{toc=2}/   # Only h1 and h2
+```
+
 ---
 
 ## Error Handling
@@ -1810,7 +1931,7 @@ Implementations MUST handle errors gracefully:
 
 ## Future Considerations
 
-> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.4.
+> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.5.
 
 ### Document-Level Directives
 
@@ -1839,7 +1960,7 @@ This feature is deferred pending implementation experience.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    SEDMAT 3.4 Quick Reference                     │
+│                    SEDMAT 3.5 Quick Reference                     │
 ├──────────────────────────────────────────────────────────────────┤
 │ COMMANDS                                                          │
 │   s/pattern/replacement/[flags]  Substitute                       │
@@ -1861,6 +1982,10 @@ This feature is deferred pending implementation experience.
 │   {,}         Subscript     {w}         Small caps                │
 │   {!b}        Negate bold   {b i _}     Combine flags             │
 │                                                                   │
+│ CHECKBOXES (tri-state):                                           │
+│   {check}     Unchecked ☐   {check=n}   Unchecked ☐               │
+│   {check=y}   Checked ☑     {check=n b} Checkbox + bold           │
+│                                                                   │
 │ INLINE SCOPING (apply style to part of replacement):              │
 │   {b=text}    Bold just "text"         {i=text}   Italic "text"   │
 │   {^=text}    Superscript "text"       {,=text}   Subscript "text"│
@@ -1869,11 +1994,17 @@ This feature is deferred pending implementation experience.
 │ VALUE FLAGS (key=value):                                          │
 │   {t=text}    Replacement text (default: $0 = matched text)       │
 │   {c=red}     Color         {z=yellow}  Background                │
+│   {c=#FF0000} Color (hex)   {z=#FFFF00} Background (hex)          │
 │   {f=Roboto}  Font          {s=14}      Size (pt)                 │
 │   {u=URL}     Link          {u=#name}   Bookmark link             │
 │   {h=1}       Heading 1     {h=t}       Title                     │
 │   {h=s}       Subtitle      {h}         Heading 1 (default)       │
 │   {h=0}       Normal text   {cols=N}    Section columns           │
+│   {p=12}      Spacing 12pt  {p=12,6}    12pt above, 6pt below     │
+│                                                                   │
+│ NAMED COLORS:                                                     │
+│   black white red green blue yellow cyan magenta                  │
+│   orange purple pink brown gray/grey lightgray darkgray navy teal │
 │                                                                   │
 │ IMPLICIT t= RULE:                                                 │
 │   {b} expands to {b t=$0} — matched text is preserved             │
@@ -1888,6 +2019,9 @@ This feature is deferred pending implementation experience.
 │ COLUMNS (structural — targets containing section):                │
 │   {cols=2}    2-column section          {cols=1}   Single column  │
 │   {+=s cols=2} Section break + 2 cols   {+=c}      Column break   │
+│                                                                   │
+│ TABLE OF CONTENTS:                                                │
+│   {toc}       Full TOC      {toc=2}     TOC depth 2 (h1-h2 only)  │
 │                                                                   │
 │ SUPERSCRIPT/SUBSCRIPT:                                            │
 │   {^}         Whole sup     {,}         Whole sub                 │
@@ -1957,85 +2091,44 @@ This feature is deferred pending implementation experience.
 
 ## Changelog
 
-### v3.4 (2026-02-18)
+### v3.5 (2026-02-18)
 
-**Major: Column Support**
+**New Features:**
 
-- **Added `cols=` structural flag**: Sets the number of columns in the containing section
-  - `{cols=2}` — 2-column layout
-  - `{cols=1}` — Single column (default)
-  - `{cols}` (bare) — Resets to 1 column
-- **Added "Columns" section**: Full documentation of column support including:
-  - Structural vs text flags explanation
-  - Pairing with section breaks (`{+=s cols=2}`)
-  - Column breaks (`{+=c}`)
-  - Deduplication behavior for multiple matches in same section
-  - Newsletter layout examples
-- **Updated Design Rules**: Added rule 6 explaining structural flags (cols=, +=) target containers, not text
-- **Updated Value Flags table**: Added `cols` with default 1
-- **Updated ABNF**: Added "cols" to `val-key` production
-- **Updated Conformance Levels**: Level 3 (Structural) now includes `{cols=N}`
-- **Updated Implementation Status**: Added `cols=` as ✅ Stable REQUIRED
-- **Updated Quick Reference Card**: Added columns section and `{cols=N}` to value flags
-- **Added newsletter layout example** in Complete Examples section
+- **Checkboxes (`{check}`)**: Native checklist support with tri-state semantics
+  - `{check}` or `{check=n}` — unchecked checkbox
+  - `{check=y}` — checked checkbox
+  - Can combine with other flags: `{check=n b}`
+- **Table of Contents (`{toc}`)**: Auto-generated TOC from document headings
+  - `{toc}` — full table of contents
+  - `{toc=N}` — TOC with max depth N
+  - Implementations SHOULD auto-link entries to headings
+- **Named Colors**: Standard 18-color palette for `c=` and `z=` flags
+  - black, white, red, green, blue, yellow, cyan, magenta
+  - orange, purple, pink, brown, gray/grey, lightgray, darkgray, navy, teal
+  - Hex (`#RRGGBB`) REQUIRED; named colors RECOMMENDED
+- **Paragraph Spacing (`{p=}`)**: Clarified spacing syntax
+  - `{p=12}` — 12pt above and below
+  - `{p=12,6}` — 12pt above, 6pt below
+  - `{p}` bare — reset to default
 
-### v3.3 (2026-02-18)
+**Documentation:**
 
-**Major: Inline Scoping for Boolean Flags**
+- Added sections: Checkboxes, Table of Contents, Named Colors, Paragraph Spacing
+- Trimmed Columns section from ~112 to ~60 lines
+- Consolidated changelog (v3.0–v3.4 merged into v3.5)
+- Updated ABNF with `check-flag`, `toc-flag`, `color-value`, `spacing-value`
+- Updated Conformance Levels, Implementation Status, Quick Reference Card
 
-- **Added inline scoping**: Boolean flags now accept optional `=text` for inline scoping (e.g., `{b=text}`, `{^=text}`, `{,=text}`)
-  - `{b}` alone = bold the whole match (implicit `{b=$0}`)
-  - `{b=text}` embedded = bold just "text" inline
-  - Works for all 8 boolean flags: `b`, `i`, `_`, `-`, `#`, `^`, `,`, `w`
-  - Enables clean partial formatting: `H{,=2}O`, `E=mc{^=2}`, `{b=Warning}: read this`
-  - `{b=text}` is syntactic sugar for `{b t=text}` in inline context
-- **Deprecated `=n` negation**: The `=n` suffix for negation (e.g., `{b=n}`) is no longer supported since `=` on boolean flags now indicates inline scoping. Use `!` prefix for all negation (`{!b}`)
-- **Simplified superscript/subscript documentation**: Replaced awkward two-pass/placeholder examples with clean inline scoping patterns
-- **Updated ABNF**: `bool-flag` now optionally accepts `= val-value`; removed `=n` from `neg-flag`
-- **Updated Design Rules**: Added rule 5 about inline scoping context
-- **Updated Quick Reference Card**: Added inline scoping section with examples
-- **Updated Conformance Levels**: Level 1 now requires inline scoping support
-- **Added scientific notation examples**: Chemistry (H₂O, CO₂) and math (E=mc², x²+y²=z²)
+**Includes all features from v3.0–v3.4:**
 
-### v3.1 (2026-02-18)
-
-**Major: Cleanup and Simplification**
-
-- **Removed all deprecated syntax**: Pipe table syntax, custom image shorthands, `__underline__`, and inline wrappers removed from spec (previously deprecated in v3.0)
-- **Removed `{baseline=super}` and `{baseline=sub}`**: These were added in v3.0 but removed — use `{^}` and `{,}` boolean flags
-- **Removed `{super=text}` and `{sub=text}` inline wrappers**: These were added in v3.0 but removed — use boolean flags with Unicode for partial formatting
-- **Simplified table range syntax**: Removed redundant `A:A` and `2:2` whole-row/column notation; use `{T=1!1,*}` and `{T=1!*,2}` wildcards instead
-- **Expanded superscript/subscript documentation**: Clarified that `{^}` and `{,}` apply to entire replacement; documented Unicode approach for partial formatting
-- **Added `chip://bookmark/` note**: Documented that `{u=#name}` is the preferred shorthand
-- **Updated processing model diagram**: Added "Parse Brace Syntax" step after formatting detection
-- **Removed Conformance Level 7**: Backward compatibility level removed with deprecated syntax
-- **Updated ABNF**: Removed deprecated syntax productions
-- **Updated Quick Reference Card**: Removed deprecated syntax section; simplified table syntax
-
-### v3.0 (2026-02-18)
-
-**Major: Brace Syntax as Canonical Formatting System**
-
-- **Brace Syntax promoted to canonical**: Brace syntax (`{b}`, `{c=red}`, `{h=1}`) is now the primary formatting system; Markdown shortcuts demoted to convenience layer
-- **Structural reorganization**: Commands → Flags → Brace Syntax → Back-references → Links → Images → Tables → Positional Insert → CLI → Escaping → Markdown Alternatives → Grammar → Conformance → Status → Examples
-- **Implicit `t=` rule**: Documented that `{b}` expands to `{b t=$0}` — matched text is preserved unless explicitly overridden
-- **Boolean flags**: `b` (bold), `i` (italic), `_` (underline), `-` (strike), `#` (code), `^` (sup), `,` (sub), `w` (smallcaps)
-- **Flag negation**: `!b` to explicitly turn off a style
-- **Value flags**: `t=` (text), `c=` (color), `z=` (background), `f=` (font), `s=` (size), `u=` (url), `l=` (leading), `a=` (align), `o=` (opacity), `n=` (indent), `k=` (kerning), `x=` (width), `y=` (height), `p=` (spacing), `h=` (heading), `e=` (effect)
-- **Heading shorthands**: `h=t` (title), `h=s` (subtitle), `h=1`–`h=6` (headings), `h` bare (reset)
-- **Format reset**: `{0}` resets all formatting; bare value flags reset individual attributes
-- **Breaks**: `{+}` (horizontal rule), `{+=p}` (page), `{+=c}` (column), `{+=s}` (section)
-- **Comments**: `{"=text}` attaches annotations to matched text
-- **Bookmarks**: `{@=name}` creates anchors; `{u=#name}` links to them
-- **URI schemes**: Standard (`https:`, `mailto:`, `tel:`, `geo:`, `sms:`, `webcal:`, `file:`) and custom `chip://` schemes for Google Docs smart chips (person, date, file, place, dropdown, chart, bookmark)
-- **Charts**: Direct `chip://chart/` reference and Unix pipe composition
-- **Removed**: Colon-based `{key:value:text}` syntax — all brace syntax uses `key=value` format
-- **Removed**: Separate "Style Attributes — PROPOSED" section — merged into Brace Syntax as STABLE
-- **Removed**: `style-attrs` ABNF production — replaced with unified `brace-expr`
-- **Deferred**: Document-level directives (`!^!{}`) moved to Future Considerations
-- Updated ABNF grammar with unified brace syntax productions
-- Updated conformance levels: Levels 1-5 are REQUIRED (Core through Smart Chips), Level 6 (Markdown) is RECOMMENDED
-- Updated quick reference card with comprehensive brace syntax section
+- Brace Syntax as canonical formatting system (v3.0)
+- Unified `{T=}` table addressing and `{img=}` image references (v3.1)
+- Inline scoping for boolean flags (`{b=text}`, `{^=text}`, `{,=text}`) (v3.3)
+- Column support (`{cols=N}`) as structural flag (v3.4)
+- Structural vs text flag distinction
+- `chip://` smart chips for Google Docs
+- All extended commands (`d/`, `a/`, `i/`, `y/`)
 
 ### v2.0 (2026-02-17)
 
