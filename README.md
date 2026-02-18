@@ -6,14 +6,14 @@
 
 ## Abstract
 
-SEDMAT (Sed-Expression-Driven Markdown Annotation & Transformation) is a specification for document manipulation using sed-inspired syntax combined with Markdown-style formatting. It provides a portable, human-readable DSL for batch text transformations, formatting operations, and structural modifications targeting rich document formats (Google Docs, Word, etc.).
+SEDMAT (Sed-Expression-Driven Markdown Annotation & Transformation) is a specification for document manipulation using sed-inspired syntax combined with a compact brace-based formatting DSL (`{flags}`). Markdown-style formatting is supported as a convenience layer. SEDMAT provides a portable, human-readable DSL for batch text transformations, formatting operations, and structural modifications targeting rich document formats (Google Docs, Word, etc.).
 
 ## Introduction
 
 SEDMAT enables:
 
 - **Familiar Syntax**: sed-style `s/pattern/replacement/flags` expressions
-- **Rich Formatting**: Markdown-compatible styling (`**bold**`, `*italic*`, `[links](url)`)
+- **Rich Formatting**: Brace syntax (`{b}`, `{c=red}`, `{h=1}`) as canonical format, with Markdown shortcuts (`**bold**`, `*italic*`) as convenience
 - **Structural Operations**: Headings, lists, tables, horizontal rules, blockquotes, code blocks
 - **Extended Commands**: `d/` (delete), `a/` (append), `i/` (insert), `y/` (transliterate)
 - **Regex Power**: Full Extended Regular Expression (ERE) support with back-references
@@ -190,7 +190,9 @@ s|path/to/file|replacement|
 
 Implementations MUST support at minimum `/`, `#`, and `|` as delimiters.
 
-## Text Formatting
+## Text Formatting (Markdown Shortcuts — RECOMMENDED)
+
+> **Note**: Markdown formatting is a RECOMMENDED convenience layer. The canonical formatting system is [Brace Syntax](#brace-syntax--compact-formatting-dsl--stable). Implementations MUST support brace syntax; Markdown shortcuts are RECOMMENDED.
 
 ### Inline Styles
 
@@ -1396,18 +1398,17 @@ Circular reference | MUST detect and reject
 - Dry-run mode: `--dry-run` / `-n`
 - Batch processing: `-f file.sed`
 
-### Level 5: Brace Syntax (REQUIRED)
+### Level 5: Brace Syntax Extended (REQUIRED)
 
 - All Level 4 features
-- Brace syntax parsing `{flags}`
-- Boolean flags: `b`, `i`, `_`, `-`, `#`, `^`, `,`, `w` (and negation)
-- Value flags: `t=`, `c=`, `z=`, `f=`, `s=`, `u=`, `l=`, `a=`, `o=`, `n=`, `k=`, `x=`, `y=`, `p=`, `h=`, `e=`
-- Heading shorthands: `h=t`, `h=s`, `h=1`–`h=6`
+- Heading shorthands: `{h=t}`, `{h=s}`, `{h=1}`–`{h=6}`
 - Breaks: `{+}`, `{+=p}`, `{+=c}`, `{+=s}`
 - Comments: `{"=text}`
 - Bookmarks: `{@=name}`, `{u=#name}`
 - URI schemes: standard (`https:`, `mailto:`, `tel:`, etc.) and `chip://` smart chips
-- Reset: `{0}` (all formatting), bare value flags (individual resets)
+- Charts: `chip://chart/` references
+
+> **Note**: Core brace syntax (parsing, boolean/value flags, reset) is included in Level 1 as REQUIRED.
 
 ### Level 6: Advanced (OPTIONAL)
 
@@ -1521,7 +1522,7 @@ Circular reference | MUST detect and reject
 - **URI schemes**: Standard (`https:`, `mailto:`, `tel:`, `geo:`, `sms:`, `webcal:`, `file:`) and custom `chip://` schemes for Google Docs smart chips (person, date, file, place, dropdown, chart, bookmark)
 - **Charts**: Direct `chip://chart/` reference and Unix pipe composition
 - Updated ABNF grammar with full brace syntax productions
-- Updated conformance levels: Level 5 (Brace Syntax) added as OPTIONAL; previous Level 5 renumbered to Level 6
+- Updated conformance levels: Level 5 (Brace Syntax Extended) added as REQUIRED; core brace syntax moved into Level 1; Markdown formatting downgraded to RECOMMENDED; previous Level 5 renumbered to Level 6
 - Updated quick reference card with brace syntax section
 
 ### v2.0 (2026-02-17)
