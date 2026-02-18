@@ -196,17 +196,17 @@ Implementations MUST support at minimum `/`, `#`, and `|` as delimiters.
 
 Syntax | Effect | Status
 --- | --- | ---
-`**text**` | Bold | REQUIRED
-`*text*` | Italic | REQUIRED
-`_text_` | Italic | REQUIRED
-`***text***` | Bold + Italic | REQUIRED
-`~~text~~` | Strikethrough | REQUIRED
-`` `text` `` | Monospace | REQUIRED
-`__text__` | Underline | RECOMMENDED
+`**text**` | Bold | RECOMMENDED
+`*text*` | Italic | RECOMMENDED
+`_text_` | Italic | RECOMMENDED
+`***text***` | Bold + Italic | RECOMMENDED
+`~~text~~` | Strikethrough | RECOMMENDED
+`` `text` `` | Monospace | RECOMMENDED
+`__text__` | Underline | OPTIONAL
 `{super=text}` | Superscript | REQUIRED
 `{sub=text}` | Subscript | REQUIRED
-`^{text}` | Superscript (DEPRECATED) | REQUIRED
-`~{text}` | Subscript (DEPRECATED) | REQUIRED
+`^{text}` | Superscript (DEPRECATED) | OPTIONAL
+`~{text}` | Subscript (DEPRECATED) | OPTIONAL
 
 **Examples:**
 
@@ -812,11 +812,11 @@ Attribute | Inline `{k:v:text}` | Expression-level `/{k:v}` | Effect
 `break:page` | — | 🔮 | Insert page break after
 `break:section` | — | 🔮 | Insert section break after
 
-## Brace Syntax — Compact Formatting DSL
+## Brace Syntax — Compact Formatting DSL ✅ STABLE
 
-> **Status**: 🔮 PROPOSED (except basic brace parsing which is ✅ STABLE)
+> **Status**: ✅ STABLE — Brace Syntax is the canonical formatting system in SEDMAT. All brace syntax features are REQUIRED. Markdown formatting alternatives (e.g., `**bold**`, `*italic*`) are RECOMMENDED convenience shortcuts but are not the primary syntax.
 
-Brace Syntax is an alternative to Markdown formatting in SEDMAT replacement strings. It uses `{key value}` pairs inside curly braces to specify formatting, structural, and semantic attributes. Brace Syntax coexists with Markdown — both are valid, and implementations MAY support either or both.
+Brace Syntax is the primary formatting system in SEDMAT replacement strings. It uses `{key value}` pairs inside curly braces to specify formatting, structural, and semantic attributes. Brace Syntax coexists with Markdown — both are valid — but brace syntax is the canonical form. Implementations MUST support brace syntax; Markdown formatting is RECOMMENDED.
 
 ### Overview
 
@@ -1209,8 +1209,8 @@ Basic `s///` syntax | ✅ Stable | REQUIRED
 Global flag `g` | ✅ Stable | REQUIRED
 Nth occurrence flag `n` | ✅ Stable | REQUIRED
 Multiline flag `m` | ✅ Stable | REQUIRED
-Text formatting (bold, italic, strike, mono) | ✅ Stable | REQUIRED
-Underline `__text__` | ✅ Stable | RECOMMENDED
+Text formatting — Markdown (`**`, `*`, `` ` ``, `~~`) | ✅ Stable | RECOMMENDED
+Underline `__text__` | ✅ Stable | OPTIONAL
 Back-references `$1`-`$9`, `&` | ✅ Stable | REQUIRED
 Dollar sign escaping `$$` | ✅ Stable | REQUIRED
 Whole-match `&` / literal `\&` | ✅ Stable | REQUIRED
@@ -1254,17 +1254,17 @@ Style attributes `{key:value}` | 🔮 Proposed | OPTIONAL
 Document directives `!^!{}` | 🔮 Proposed | OPTIONAL
 @ mentions | 🔮 Proposed | OPTIONAL
 Brace syntax: basic parsing | ✅ Stable | REQUIRED
-Brace syntax: boolean flags (`b`, `i`, `_`, `-`, `#`, `^`, `,`, `w`) | 🔮 Proposed | OPTIONAL
-Brace syntax: negation (`!b`, `b=n`) | 🔮 Proposed | OPTIONAL
-Brace syntax: value flags (`c=`, `z=`, `f=`, `s=`, etc.) | 🔮 Proposed | OPTIONAL
-Brace syntax: text flag (`t=`) | 🔮 Proposed | OPTIONAL
-Brace syntax: heading shorthands (`h=t`, `h=1`, etc.) | 🔮 Proposed | OPTIONAL
-Brace syntax: breaks (`{+}`, `{+=p}`, etc.) | 🔮 Proposed | OPTIONAL
-Brace syntax: comments (`{"=text}`) | 🔮 Proposed | OPTIONAL
-Brace syntax: bookmarks (`{@=name}`) | 🔮 Proposed | OPTIONAL
-Brace syntax: URL/link (`u=`) | 🔮 Proposed | OPTIONAL
-Brace syntax: `chip://` smart chips | 🔮 Proposed | OPTIONAL
-Brace syntax: reset (`{0}`) | 🔮 Proposed | OPTIONAL
+Brace syntax: boolean flags (`b`, `i`, `_`, `-`, `#`, `^`, `,`, `w`) | ✅ Stable | REQUIRED
+Brace syntax: negation (`!b`, `b=n`) | ✅ Stable | REQUIRED
+Brace syntax: value flags (`c=`, `z=`, `f=`, `s=`, etc.) | ✅ Stable | REQUIRED
+Brace syntax: text flag (`t=`) | ✅ Stable | REQUIRED
+Brace syntax: heading shorthands (`h=t`, `h=1`, etc.) | ✅ Stable | REQUIRED
+Brace syntax: breaks (`{+}`, `{+=p}`, etc.) | ✅ Stable | REQUIRED
+Brace syntax: comments (`{"=text}`) | ✅ Stable | REQUIRED
+Brace syntax: bookmarks (`{@=name}`) | ✅ Stable | REQUIRED
+Brace syntax: URL/link (`u=`) | ✅ Stable | REQUIRED
+Brace syntax: `chip://` smart chips | ✅ Stable | REQUIRED
+Brace syntax: reset (`{0}`) | ✅ Stable | REQUIRED
 
 ## Complete Examples
 
@@ -1357,7 +1357,10 @@ Circular reference | MUST detect and reject
 
 - Basic `s/pattern/replacement/` and `s/pattern/replacement/g`
 - Flags: `g`, `n` (nth occurrence), `m` (multiline)
-- Text formatting: `**bold**`, `*italic*`, `` `mono` ``, `~~strike~~`
+- Brace syntax: boolean flags (`{b}`, `{i}`, `{_}`, `{-}`, `{#}`, `{^}`, `{,}`, `{w}`), negation (`{!b}`, `{b=n}`)
+- Brace syntax: value flags (`{c=}`, `{z=}`, `{f=}`, `{s=}`, `{u=}`, `{t=}`, `{l=}`, `{a=}`, `{o=}`, `{n=}`, `{k=}`, `{x=}`, `{y=}`, `{p=}`, `{h=}`, `{e=}`)
+- Brace syntax: reset (`{0}`)
+- Text formatting — Markdown shortcuts: `**bold**`, `*italic*`, `` `mono` ``, `~~strike~~` (RECOMMENDED)
 - Back-references: `$1`-`$9`, `&`, `$$` escaping
 - Links: `[text](url)`, `<url>`
 
@@ -1393,7 +1396,7 @@ Circular reference | MUST detect and reject
 - Dry-run mode: `--dry-run` / `-n`
 - Batch processing: `-f file.sed`
 
-### Level 5: Brace Syntax (OPTIONAL)
+### Level 5: Brace Syntax (REQUIRED)
 
 - All Level 4 features
 - Brace syntax parsing `{flags}`
@@ -1483,7 +1486,7 @@ Circular reference | MUST detect and reject
 │   --dry-run / -n            Preview changes (no modify)           │
 │   -f file.sed               Batch expressions from file           │
 ├──────────────────────────────────────────────────────────────────┤
-│ BRACE SYNTAX {flags}                                 🔮 PROPOSED │
+│ BRACE SYNTAX {flags}                                 ✅ REQUIRED │
 │   {b}         Bold          {i}         Italic                    │
 │   {_}         Underline     {-}         Strikethrough             │
 │   {#}         Code/mono     {^}         Superscript               │
