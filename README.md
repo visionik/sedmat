@@ -1,7 +1,7 @@
 # SEDMAT: Sed-Expression-Driven Markdown Annotation & Transformation
 
-**Version**: 2.0  
-**Last Updated**: 2026-02-17  
+**Version**: 3.0  
+**Last Updated**: 2026-02-18  
 **Status**: Draft
 
 ## Abstract
@@ -812,6 +812,221 @@ Attribute | Inline `{k:v:text}` | Expression-level `/{k:v}` | Effect
 `break:page` | — | 🔮 | Insert page break after
 `break:section` | — | 🔮 | Insert section break after
 
+## Brace Syntax — Compact Formatting DSL
+
+> **Status**: 🔮 PROPOSED (except basic brace parsing which is ✅ STABLE)
+
+Brace Syntax is an alternative to Markdown formatting in SEDMAT replacement strings. It uses `{key value}` pairs inside curly braces to specify formatting, structural, and semantic attributes. Brace Syntax coexists with Markdown — both are valid, and implementations MAY support either or both.
+
+### Overview
+
+Where Markdown uses wrapper characters (`**bold**`, `*italic*`), Brace Syntax uses flag-based declarations:
+
+```bash
+# Markdown style
+s/error/**error**/g
+
+# Brace Syntax equivalent
+s/error/{b}/g
+
+# Brace Syntax with color (no Markdown equivalent)
+s/error/{b c=red}/g
+```
+
+Brace Syntax is particularly useful for expressing attributes that have no Markdown equivalent (color, font, size, background, headings, breaks, comments, bookmarks, smart chips).
+
+### Boolean Flags
+
+Boolean flags are activated by presence alone. No `=y` is needed.
+
+| Short | Long | Effect |
+|-------|------|--------|
+| `b` | `bold` | Bold |
+| `i` | `italic` | Italic |
+| `_` | `underline` | Underline |
+| `-` | `strike` | Strikethrough |
+| `#` | `code` | Monospace/code |
+| `^` | `sup` | Superscript |
+| `,` | `sub` | Subscript |
+| `w` | `smallcaps` | Small caps |
+
+**Negation**: Use `!` prefix or `=n` suffix to explicitly turn off a flag:
+
+```bash
+s/already bold/{!b}/g     # Remove bold
+s/already bold/{b=n}/g    # Equivalent
+```
+
+**Combining**: Multiple boolean flags MAY appear in a single brace group:
+
+```bash
+s/critical/{b i _}/g      # Bold + italic + underline
+s/code/{# -}/g            # Monospace + strikethrough
+```
+
+### Value Flags
+
+Value flags use `key=value` syntax. When a value flag appears **bare** (without `=value`), it resets to its default.
+
+| Short | Long | Default (bare) | Effect |
+|-------|------|----------------|--------|
+| `t` | `text` | `$0` (matched text) | Replacement text |
+| `c` | `color` | black | Text color |
+| `z` | `bg` | clear | Background color |
+| `f` | `font` | Arial | Font family |
+| `s` | `size` | 11pt | Font size |
+| `u` | `url` | (strip link) | Link/URL/URI |
+| `l` | `leading` | 1.15 | Line height |
+| `a` | `align` | left | Text alignment |
+| `o` | `opacity` | 100 | Opacity (percentage) |
+| `n` | `indent` | 0 | Indent level |
+| `k` | `kerning` | 0 | Letter spacing |
+| `x` | `width` | — | Width in pixels |
+| `y` | `height` | — | Height in pixels |
+| `p` | `spacing` | — | Paragraph spacing above/below |
+| `h` | `heading` | NORMAL_TEXT | Heading level |
+| `e` | `effect` | — | Shadow/glow/blur |
+
+### Key Design Rules
+
+1. **`t=` defaults to `$0`** — The matched text is preserved unless explicitly overridden with `t=replacement`.
+2. **Boolean flags need no `=y`** — Simply `{b i _}` for bold + italic + underline.
+3. **Bare value flags reset to defaults** — `{f s c z}` resets font to Arial, size to 11pt, color to black, background to clear. This is equivalent to "reset all formatting."
+4. **`{0}` resets ALL formatting** — Acts like CSS `all: unset`. Clears every style attribute to its default. MAY be combined with new flags: `{0 b}` resets everything then applies bold.
+
+### Heading Shorthands
+
+The `h` flag controls heading level using compact shorthands:
+
+| Syntax | Maps to |
+|--------|---------|
+| `h=t` | TITLE |
+| `h=s` | SUBTITLE |
+| `h=1` through `h=6` | HEADING_1 through HEADING_6 |
+| `h` (bare) | NORMAL_TEXT (reset heading) |
+
+```bash
+s/My Document/{h=t}/g         # Set as Title
+s/Overview/{h=s}/g             # Set as Subtitle
+s/Chapter 1/{h=1 b}/g         # Heading 1 + bold
+s/normal paragraph/{h}/g       # Reset to normal text
+```
+
+### Breaks: `+` Key
+
+The `+` key inserts structural breaks. When used alone, it inserts a horizontal rule. With a value, it specifies the break type:
+
+| Syntax | Effect |
+|--------|--------|
+| `{+}` | Horizontal rule (default) |
+| `{+=p}` | Page break |
+| `{+=c}` | Column break |
+| `{+=s}` | Section break |
+
+```bash
+s/---/{+}/g                    # Horizontal rule
+s/END/{+=p}/g                  # Page break
+s/COLUMN_BREAK/{+=c}/g        # Column break
+```
+
+### Comments: `"` Key
+
+The `"` key attaches a comment (annotation) to the matched text:
+
+| Syntax | Effect |
+|--------|--------|
+| `{"=text}` | Adds a comment to the matched text |
+
+```bash
+s/TODO/{"=needs review b c=red}/g   # Comment + bold + red
+```
+
+### Bookmarks: `@` Key
+
+The `@` key creates a bookmark anchor. Combined with `u=#name`, this enables internal document linking:
+
+| Syntax | Effect |
+|--------|--------|
+| `{@=name}` | Creates a bookmark anchor on the matched text |
+| `{u=#name}` | Links to a bookmark by name |
+
+```bash
+s/Chapter 1/{@=ch1 h=1}/g            # Bookmark + heading
+s/see Chapter 1/{u=#ch1 c=blue _}/g  # Link to bookmark
+```
+
+### URI Schemes for `u=`
+
+The `u` flag accepts any valid URI. SEDMAT defines standard schemes and custom `chip://` schemes for Google Docs smart chips.
+
+#### Standard Schemes
+
+| Scheme | Example |
+|--------|---------|
+| `https://` | `{u=https://deft.md}` |
+| `mailto:` | `{u=mailto:viz@example.com}` |
+| `tel:` | `{u=tel:+14076163470}` |
+| `geo:` | `{u=geo:28.69,-81.31}` |
+| `sms:` | `{u=sms:+14076163470}` |
+| `webcal:` | `{u=webcal://feed.ics}` |
+| `file:` | `{u=file:///path}` |
+
+#### Custom `chip://` Schemes
+
+For Google Docs smart chip insertion:
+
+| Scheme | Example | Effect |
+|--------|---------|--------|
+| `chip://person/` | `{u=chip://person/viz@example.com}` | Person smart chip |
+| `chip://date/` | `{u=chip://date/2026-03-15}` | Date smart chip |
+| `chip://file/` | `{u=chip://file/DOC_ID}` | File link chip |
+| `chip://place/` | `{u=chip://place/Orlando, FL}` | Place chip |
+| `chip://dropdown/` | `{u=chip://dropdown/Draft\|Review\|Done}` | Dropdown chip |
+| `chip://chart/` | `{u=chip://chart/SHEET_ID/0}` | Chart embed |
+| `chip://bookmark/` | `{u=chip://bookmark/section-1}` | Internal doc link |
+
+### Charts
+
+Two approaches for embedding charts from Google Sheets:
+
+1. **Direct reference**: `{u=chip://chart/SHEET_ID/CHART_INDEX x=600 y=400}` — pulls a chart from a linked Sheet and embeds it at the specified dimensions.
+2. **Pipe**: `gog sheets chart SHEET_ID 0 --png | gog docs sed DOC_ID 's/PLACEHOLDER/!(-)/g'` — export chart as image, then insert via Unix pipe composition.
+
+### Brace Syntax Examples
+
+```bash
+# Simple styling
+s/error/{b c=red}/g
+s/TODO/{b c=red z=yellow}/g
+s/note/{i c=gray s=10}/g
+
+# Reset formatting
+s/messy text/{0}/g
+s/messy text/{0 b}/g          # reset then bold
+
+# Links and chips
+s/viz/{u=chip://person/jtaylor@zendicate.com}/g
+s/deadline/{u=chip://date/2026-03-15}/g
+s/call me/{u=tel:+14075551234}/g
+
+# Headings
+s/My Doc/{h=t}/g
+s/Overview/{h=s}/g
+s/Chapter 1/{h=1 b}/g
+
+# Breaks
+s/END/{+=p}/g
+s/---/{+}/g
+
+# Comments and bookmarks
+s/TODO/{@=todo1 "=needs review b c=red}/g
+s/see above/{u=#todo1 c=blue _}/g
+
+# Combined
+s/WARNING/{b i c=red s=14 z=yellow}/g
+s/https\S+/{u=$0 c=blue _}/g
+```
+
 ## Document-Level Directives — 🔮 PROPOSED
 
 > **Status**: PROPOSED — not yet implemented.
@@ -869,7 +1084,7 @@ flags          = *( "g" / DIGIT / "m" ) [style-attrs]
 ; --- Replacement ---
 replacement    = *( plain-text / format-expr / back-ref / image-expr
                    / link-expr / table-expr / heading-expr / list-expr
-                   / block-expr / footnote-expr / super-sub )
+                   / block-expr / footnote-expr / super-sub / brace-expr )
 
 format-expr    = bold / italic / bold-italic / strike / mono / underline
 
@@ -933,12 +1148,57 @@ col-op         = "col:" ("+" DIGIT+ / "$+" / ["-"] DIGIT+)
 merge-range    = (DIGIT+ / ALPHA+DIGIT+) "," (DIGIT+ / ALPHA+DIGIT+) ":"
                  (DIGIT+ / ALPHA+DIGIT+) "," (DIGIT+ / ALPHA+DIGIT+)
 
-; --- Proposed: Style Attributes ---
+; --- Proposed: Style Attributes (legacy) ---
 style-attrs    = "{" attr-pair *( SP attr-pair ) "}"     ; 🔮 PROPOSED
 attr-pair      = attr-key ":" attr-value
 
 ; --- Proposed: Document Directives ---
 directive      = "!^!{" attr-pair *( SP attr-pair ) "}"  ; 🔮 PROPOSED
+
+; --- Brace Syntax (v3.0) ---
+brace-expr     = "{" brace-body "}"
+brace-body     = reset-all / brace-flags
+reset-all      = "0" *( SP brace-flag )                  ; {0} or {0 b i}
+
+brace-flags    = brace-flag *( SP brace-flag )
+brace-flag     = bool-flag / neg-flag / value-flag / break-flag
+                 / comment-flag / bookmark-flag
+
+bool-flag      = "b" / "bold" / "i" / "italic" / "_" / "underline"
+                 / "-" / "strike" / "#" / "code" / "^" / "sup"
+                 / "," / "sub" / "w" / "smallcaps"
+
+neg-flag       = "!" bool-flag / bool-flag "=n"          ; Negation
+
+value-flag     = val-key "=" val-value
+val-key        = "t" / "text" / "c" / "color" / "z" / "bg"
+                 / "f" / "font" / "s" / "size" / "u" / "url"
+                 / "l" / "leading" / "a" / "align" / "o" / "opacity"
+                 / "n" / "indent" / "k" / "kerning" / "x" / "width"
+                 / "y" / "height" / "p" / "spacing" / "h" / "heading"
+                 / "e" / "effect"
+val-value      = 1*(%x21-7E)                             ; Non-space printable ASCII
+
+break-flag     = "+" ["=" break-type]
+break-type     = "p" / "c" / "s"                         ; page / column / section
+
+comment-flag   = DQUOTE "=" comment-text
+comment-text   = 1*(%x20-7E)                             ; Printable ASCII incl. space
+
+bookmark-flag  = "@" "=" bookmark-name
+bookmark-name  = 1*(%x21-7E)
+
+heading-value  = "t" / "s" / "1" / "2" / "3" / "4" / "5" / "6"
+                 ; t=TITLE, s=SUBTITLE, 1-6=HEADING_1-6
+
+uri-value      = standard-uri / chip-uri / bookmark-uri
+standard-uri   = scheme ":" *(%x21-7E)
+scheme         = "https" / "http" / "mailto" / "tel" / "geo"
+                 / "sms" / "webcal" / "file"
+chip-uri       = "chip://" chip-type "/" *(%x21-7E)
+chip-type      = "person" / "date" / "file" / "place"
+                 / "dropdown" / "chart" / "bookmark"
+bookmark-uri   = "#" bookmark-name                        ; {u=#name}
 ```
 
 ## Implementation Status
@@ -993,6 +1253,18 @@ Table cell styling | 🔮 Proposed | OPTIONAL
 Style attributes `{key:value}` | 🔮 Proposed | OPTIONAL
 Document directives `!^!{}` | 🔮 Proposed | OPTIONAL
 @ mentions | 🔮 Proposed | OPTIONAL
+Brace syntax: basic parsing | ✅ Stable | REQUIRED
+Brace syntax: boolean flags (`b`, `i`, `_`, `-`, `#`, `^`, `,`, `w`) | 🔮 Proposed | OPTIONAL
+Brace syntax: negation (`!b`, `b=n`) | 🔮 Proposed | OPTIONAL
+Brace syntax: value flags (`c=`, `z=`, `f=`, `s=`, etc.) | 🔮 Proposed | OPTIONAL
+Brace syntax: text flag (`t=`) | 🔮 Proposed | OPTIONAL
+Brace syntax: heading shorthands (`h=t`, `h=1`, etc.) | 🔮 Proposed | OPTIONAL
+Brace syntax: breaks (`{+}`, `{+=p}`, etc.) | 🔮 Proposed | OPTIONAL
+Brace syntax: comments (`{"=text}`) | 🔮 Proposed | OPTIONAL
+Brace syntax: bookmarks (`{@=name}`) | 🔮 Proposed | OPTIONAL
+Brace syntax: URL/link (`u=`) | 🔮 Proposed | OPTIONAL
+Brace syntax: `chip://` smart chips | 🔮 Proposed | OPTIONAL
+Brace syntax: reset (`{0}`) | 🔮 Proposed | OPTIONAL
 
 ## Complete Examples
 
@@ -1121,10 +1393,23 @@ Circular reference | MUST detect and reject
 - Dry-run mode: `--dry-run` / `-n`
 - Batch processing: `-f file.sed`
 
-### Level 5: Advanced (OPTIONAL)
+### Level 5: Brace Syntax (OPTIONAL)
 
 - All Level 4 features
-- Style attributes `{key:value}`
+- Brace syntax parsing `{flags}`
+- Boolean flags: `b`, `i`, `_`, `-`, `#`, `^`, `,`, `w` (and negation)
+- Value flags: `t=`, `c=`, `z=`, `f=`, `s=`, `u=`, `l=`, `a=`, `o=`, `n=`, `k=`, `x=`, `y=`, `p=`, `h=`, `e=`
+- Heading shorthands: `h=t`, `h=s`, `h=1`–`h=6`
+- Breaks: `{+}`, `{+=p}`, `{+=c}`, `{+=s}`
+- Comments: `{"=text}`
+- Bookmarks: `{@=name}`, `{u=#name}`
+- URI schemes: standard (`https:`, `mailto:`, `tel:`, etc.) and `chip://` smart chips
+- Reset: `{0}` (all formatting), bare value flags (individual resets)
+
+### Level 6: Advanced (OPTIONAL)
+
+- All Level 5 features
+- Style attributes `{key:value}` (legacy inline span syntax)
 - Document directives `!^!{}`
 - Range references (`[A1:C3]`)
 - Cell styling
@@ -1141,7 +1426,7 @@ Circular reference | MUST detect and reject
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    SEDMAT 2.0 Quick Reference                     │
+│                    SEDMAT 3.0 Quick Reference                     │
 ├──────────────────────────────────────────────────────────────────┤
 │ COMMANDS                                                          │
 │   s/pattern/replacement/[flags]  Substitute                       │
@@ -1197,10 +1482,44 @@ Circular reference | MUST detect and reject
 │ CLI OPTIONS                                                       │
 │   --dry-run / -n            Preview changes (no modify)           │
 │   -f file.sed               Batch expressions from file           │
+├──────────────────────────────────────────────────────────────────┤
+│ BRACE SYNTAX {flags}                                 🔮 PROPOSED │
+│   {b}         Bold          {i}         Italic                    │
+│   {_}         Underline     {-}         Strikethrough             │
+│   {#}         Code/mono     {^}         Superscript               │
+│   {,}         Subscript     {w}         Small caps                │
+│   {!b}        Negate bold   {b=n}       Negate (alt)              │
+│   {b i _}     Combine flags                                       │
+│   {0}         Reset ALL     {0 b}       Reset + bold              │
+│   {c=red}     Color         {z=yellow}  Background                │
+│   {f=Roboto}  Font          {s=14}      Size (pt)                 │
+│   {u=URL}     Link          {u=#name}   Bookmark link             │
+│   {h=1}       Heading 1     {h=t}       Title                     │
+│   {h=s}       Subtitle      {h}         Normal text               │
+│   {+}         Horiz rule    {+=p}       Page break                │
+│   {"=text}    Comment       {@=name}    Bookmark anchor           │
+│   {u=chip://person/email}   Person chip                           │
+│   {u=chip://date/YYYY-MM-DD} Date chip                            │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ## Changelog
+
+### v3.0 (2026-02-18)
+- **Brace Syntax DSL**: New `{flags}` replacement syntax as an alternative to Markdown formatting
+- **Boolean flags**: `b` (bold), `i` (italic), `_` (underline), `-` (strike), `#` (code), `^` (sup), `,` (sub), `w` (smallcaps)
+- **Flag negation**: `!b` or `b=n` to explicitly turn off a style
+- **Value flags**: `t=` (text), `c=` (color), `z=` (background), `f=` (font), `s=` (size), `u=` (url), `l=` (leading), `a=` (align), `o=` (opacity), `n=` (indent), `k=` (kerning), `x=` (width), `y=` (height), `p=` (spacing), `h=` (heading), `e=` (effect)
+- **Heading shorthands**: `h=t` (title), `h=s` (subtitle), `h=1`–`h=6` (headings), `h` bare (reset)
+- **Format reset**: `{0}` resets all formatting; bare value flags reset individual attributes
+- **Breaks**: `{+}` (horizontal rule), `{+=p}` (page), `{+=c}` (column), `{+=s}` (section)
+- **Comments**: `{"=text}` attaches annotations to matched text
+- **Bookmarks**: `{@=name}` creates anchors; `{u=#name}` links to them
+- **URI schemes**: Standard (`https:`, `mailto:`, `tel:`, `geo:`, `sms:`, `webcal:`, `file:`) and custom `chip://` schemes for Google Docs smart chips (person, date, file, place, dropdown, chart, bookmark)
+- **Charts**: Direct `chip://chart/` reference and Unix pipe composition
+- Updated ABNF grammar with full brace syntax productions
+- Updated conformance levels: Level 5 (Brace Syntax) added as OPTIONAL; previous Level 5 renumbered to Level 6
+- Updated quick reference card with brace syntax section
 
 ### v2.0 (2026-02-17)
 - **New commands**: `d/pattern/` (delete), `a/pattern/text/` (append), `i/pattern/text/` (insert), `y/source/dest/` (transliterate)
