@@ -1,6 +1,6 @@
 # SEDMAT: Sed-Expression-Driven Markdown Annotation & Transformation
 
-**Version**: 3.3  
+**Version**: 3.4  
 **Last Updated**: 2026-02-18  
 **Status**: Draft
 
@@ -245,6 +245,8 @@ Brace Syntax is particularly useful for expressing attributes that have no Markd
 
 5. **Inline scoping with `{flag=text}`** — Boolean flags accept optional `=text` to scope the style to just that text inline (see [Inline Scoping](#inline-scoping-flagtext--stable)).
 
+6. **Structural flags target containers** — Most flags target text ranges, but structural flags (`cols=`, `+=`, and future page-level properties) target the containing section or document. The matched text acts as a locator to identify which section to modify. Both text flags and structural flags coexist in the same `{}` group — implementations apply each to its appropriate scope.
+
 ### The Implicit `t=` Default
 
 This is the most important design rule. When you write a brace expression, the matched text (`$0`) is implicitly preserved:
@@ -415,6 +417,7 @@ Value flags use `key=value` syntax. When a value flag appears **bare** (without 
 | `y` | `height` | — | Height in pixels |
 | `p` | `spacing` | — | Paragraph spacing above/below |
 | `e` | `effect` | — | Shadow/glow/blur |
+| `cols` | — | 1 | Number of columns in containing section |
 
 **Examples:**
 
@@ -540,6 +543,118 @@ s/---/{+}/g                   # Horizontal rule
 s/END/{+=p}/g                 # Page break
 s/COLUMN_BREAK/{+=c}/g        # Column break
 s/SECTION_END/{+=s}/g         # Section break
+```
+
+### Columns: `{cols=N}` ✅ STABLE
+
+The `cols=` flag is a **structural flag** that sets the number of columns in the section containing the match. Unlike text flags that format the matched text itself, `cols=` uses the match as a **locator** to identify which section to modify.
+
+#### How It Works
+
+- `{cols=2}` — Sets the containing section to 2 columns
+- `{cols=1}` — Returns to single column layout
+- `{cols=3}` — Three-column layout (etc.)
+- `{cols}` (bare) — Resets to 1 column (default)
+
+The matched text still receives any text formatting flags in the same group, while `cols=` separately modifies the section structure.
+
+#### Structural vs Text Flags
+
+Most SEDMAT flags target the matched **text range** (bold, color, font, etc.). Structural flags target the **containing section** or document:
+
+| Flag Type | Target | Examples |
+|-----------|--------|----------|
+| Text flags | Matched text range | `{b}`, `{c=red}`, `{h=1}`, `{f=Arial}` |
+| Structural flags | Containing section | `{cols=2}`, `{+=s}`, `{+=p}` |
+
+Both flag types coexist in the same `{}` group. Implementations apply each flag to its appropriate scope:
+
+```bash
+# h=1 and b apply to the text "Chapter"
+# cols=2 applies to the section containing "Chapter"
+s/Chapter/{h=1 b cols=2}/g
+```
+
+#### Pairing with Section Breaks
+
+Columns pair naturally with section breaks. To start a new section with a different column count:
+
+```bash
+# Insert section break, then set new section to 2 columns
+s/NEWSLETTER_START/{+=s cols=2}/g
+
+# Return to single column for the footer
+s/FOOTER_START/{+=s cols=1}/g
+```
+
+The `{+=s cols=2}` pattern:
+1. Inserts a section break after the match
+2. Sets the **new section** (after the break) to 2 columns
+
+#### Column Breaks
+
+Use `{+=c}` to insert a column break within a multi-column section:
+
+```bash
+# Force content to next column
+s/NEXT_COLUMN/{+=c}/g
+```
+
+#### Deduplication
+
+When multiple matches target the same section, implementations SHOULD deduplicate column settings. The last `cols=` value in document order wins:
+
+```bash
+# If both matches are in the same section, cols=3 wins
+s/first match/{cols=2}/g
+s/second match/{cols=3}/g
+```
+
+#### Examples
+
+**Newsletter layout:**
+```bash
+# Title in single column
+s/^/{h=t t=Monthly Newsletter}\n/
+
+# Switch to 2-column layout for articles
+s/ARTICLES_START/{+=s cols=2}/g
+
+# Column break between articles
+s/ARTICLE_BREAK/{+=c}/g
+
+# Back to single column for footer
+s/FOOTER/{+=s cols=1}/g
+```
+
+**Three-column directory:**
+```bash
+# Set up 3-column section for names
+s/DIRECTORY_START/{+=s cols=3 h=2 t=Staff Directory}/g
+
+# Each department starts a new column
+s/DEPT_BREAK/{+=c}/g
+```
+
+**Combining with text formatting:**
+```bash
+# Heading + bold on text, 2 columns on section
+s/Chapter 1/{h=1 b cols=2}/g
+
+# The matched "Chapter 1" becomes a Heading 1 in bold
+# The section containing it becomes 2-column layout
+```
+
+**Switching column counts:**
+```bash
+# Introduction: single column
+s/Introduction/{h=1 cols=1}/g
+
+# Main content: two columns
+s/Main Content/{h=1 cols=2}/g
+
+# Appendix: three columns for reference tables
+s/Appendix/{h=1 cols=3}/g
 ```
 
 ### Comments: `{"=text}` ✅ STABLE
@@ -689,6 +804,11 @@ s/x2/x{^=2}/g
 s/END/{+=p}/g
 s/---/{+}/g
 s/SECTION/{+=s}/g
+
+# Columns
+s/NEWSLETTER/{+=s cols=2}/g   # Section break + 2 columns
+s/FOOTER/{+=s cols=1}/g       # Back to single column
+s/NEXT_COL/{+=c}/g            # Column break
 
 # Comments and bookmarks
 s/TODO/{@=todo1 "=needs review b c=red}/g
@@ -1300,7 +1420,7 @@ replacement    = *( plain-text / brace-expr / format-expr / back-ref / image-exp
                    / link-expr / heading-expr / list-expr
                    / block-expr / footnote-expr )
 
-; --- Brace Syntax (v3.3) ---
+; --- Brace Syntax (v3.4) ---
 brace-expr     = "{" brace-body "}"
 brace-body     = reset-all / brace-flags
 reset-all      = "0" *( SP brace-flag )                  ; {0} or {0 b i}
@@ -1322,7 +1442,7 @@ val-key        = "t" / "text" / "c" / "color" / "z" / "bg"
                  / "l" / "leading" / "a" / "align" / "o" / "opacity"
                  / "n" / "indent" / "k" / "kerning" / "x" / "width"
                  / "y" / "height" / "p" / "spacing" / "h" / "heading"
-                 / "e" / "effect"
+                 / "e" / "effect" / "cols"
 val-value      = 1*(%x21-7E)                             ; Non-space printable ASCII
 
 break-flag     = "+" ["=" break-type]
@@ -1439,6 +1559,7 @@ positional-pat = "^$" / "^" / "$"
 - Table brace row/column operations: `{T=1!row=+N}`, `{T=1!col=$+}`, etc.
 - Table merge: `{T=1!A1:C3}/merge/`
 - Brace syntax: breaks (`{+}`, `{+=p}`, `{+=c}`, `{+=s}`)
+- Brace syntax: columns (`{cols=N}`)
 - Brace syntax: comments (`{"=text}`)
 - Brace syntax: bookmarks (`{@=name}`, `{u=#name}`)
 
@@ -1488,6 +1609,7 @@ positional-pat = "^$" / "^" / "$"
 | Brace syntax: heading shorthands (`h=t`, `h=1`, `{h}` → HEADING_1) | ✅ Stable | REQUIRED |
 | Brace syntax: `{h=0}` for NORMAL_TEXT | ✅ Stable | REQUIRED |
 | Brace syntax: breaks (`{+}`, `{+=p}`, etc.) | ✅ Stable | REQUIRED |
+| Brace syntax: columns (`{cols=N}`) | ✅ Stable | REQUIRED |
 | Brace syntax: comments (`{"=text}`) | ✅ Stable | REQUIRED |
 | Brace syntax: bookmarks (`{@=name}`) | ✅ Stable | REQUIRED |
 | Brace syntax: URL/link (`u=`) | ✅ Stable | REQUIRED |
@@ -1638,6 +1760,25 @@ s/x2\+y2=r2/x{^=2}+y{^=2}=r{^=2}/g
 s/an=a1\+\(n-1\)d/a{,=n}=a{,=1}+(n-1)d/g
 ```
 
+### Newsletter Layout with Columns
+
+```bash
+# Title in single column
+s/^/{h=t t=Monthly Newsletter}\n/
+
+# Switch to 2-column layout for articles
+s/ARTICLES_START/{+=s cols=2 h=2 t=Feature Articles}/g
+
+# Column break between major articles
+s/ARTICLE_BREAK/{+=c}/g
+
+# Sidebar in narrower 3-column layout
+s/SIDEBAR_START/{+=s cols=3 h=3 t=Quick Updates}/g
+
+# Back to single column for footer/contact
+s/CONTACT_US/{+=s cols=1 h=2 t=Contact Us}/g
+```
+
 ---
 
 ## Error Handling
@@ -1669,7 +1810,7 @@ Implementations MUST handle errors gracefully:
 
 ## Future Considerations
 
-> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.3.
+> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.4.
 
 ### Document-Level Directives
 
@@ -1698,7 +1839,7 @@ This feature is deferred pending implementation experience.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    SEDMAT 3.3 Quick Reference                     │
+│                    SEDMAT 3.4 Quick Reference                     │
 ├──────────────────────────────────────────────────────────────────┤
 │ COMMANDS                                                          │
 │   s/pattern/replacement/[flags]  Substitute                       │
@@ -1732,7 +1873,7 @@ This feature is deferred pending implementation experience.
 │   {u=URL}     Link          {u=#name}   Bookmark link             │
 │   {h=1}       Heading 1     {h=t}       Title                     │
 │   {h=s}       Subtitle      {h}         Heading 1 (default)       │
-│   {h=0}       Normal text                                         │
+│   {h=0}       Normal text   {cols=N}    Section columns           │
 │                                                                   │
 │ IMPLICIT t= RULE:                                                 │
 │   {b} expands to {b t=$0} — matched text is preserved             │
@@ -1743,6 +1884,10 @@ This feature is deferred pending implementation experience.
 │ BREAKS:                                                           │
 │   {+}         Horiz rule    {+=p}       Page break                │
 │   {+=c}       Column break  {+=s}       Section break             │
+│                                                                   │
+│ COLUMNS (structural — targets containing section):                │
+│   {cols=2}    2-column section          {cols=1}   Single column  │
+│   {+=s cols=2} Section break + 2 cols   {+=c}      Column break   │
 │                                                                   │
 │ SUPERSCRIPT/SUBSCRIPT:                                            │
 │   {^}         Whole sup     {,}         Whole sub                 │
@@ -1811,6 +1956,28 @@ This feature is deferred pending implementation experience.
 ---
 
 ## Changelog
+
+### v3.4 (2026-02-18)
+
+**Major: Column Support**
+
+- **Added `cols=` structural flag**: Sets the number of columns in the containing section
+  - `{cols=2}` — 2-column layout
+  - `{cols=1}` — Single column (default)
+  - `{cols}` (bare) — Resets to 1 column
+- **Added "Columns" section**: Full documentation of column support including:
+  - Structural vs text flags explanation
+  - Pairing with section breaks (`{+=s cols=2}`)
+  - Column breaks (`{+=c}`)
+  - Deduplication behavior for multiple matches in same section
+  - Newsletter layout examples
+- **Updated Design Rules**: Added rule 6 explaining structural flags (cols=, +=) target containers, not text
+- **Updated Value Flags table**: Added `cols` with default 1
+- **Updated ABNF**: Added "cols" to `val-key` production
+- **Updated Conformance Levels**: Level 3 (Structural) now includes `{cols=N}`
+- **Updated Implementation Status**: Added `cols=` as ✅ Stable REQUIRED
+- **Updated Quick Reference Card**: Added columns section and `{cols=N}` to value flags
+- **Added newsletter layout example** in Complete Examples section
 
 ### v3.3 (2026-02-18)
 
