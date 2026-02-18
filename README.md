@@ -203,8 +203,8 @@ Syntax | Effect | Status
 `~~text~~` | Strikethrough | REQUIRED
 `` `text` `` | Monospace | REQUIRED
 `__text__` | Underline | RECOMMENDED
-`{super:text}` | Superscript | REQUIRED
-`{sub:text}` | Subscript | REQUIRED
+`{super=text}` | Superscript | REQUIRED
+`{sub=text}` | Subscript | REQUIRED
 `^{text}` | Superscript (DEPRECATED) | REQUIRED
 `~{text}` | Subscript (DEPRECATED) | REQUIRED
 
@@ -224,13 +224,13 @@ s/deprecated/~~deprecated~~/g
 s/console\.log/`console.log`/g
 
 # Superscript and subscript
-s/H2O/H{sub:2}O/g
-s/x2/x{super:2}/g
-s/E=mc2/E=mc{super:2}/
+s/H2O/H{sub=2}O/g
+s/x2/x{super=2}/g
+s/E=mc2/E=mc{super=2}/
 
 # Deprecated syntax (still supported)
-s/H2O/H{sub:2}O/g           # ~{} is deprecated, prefer {sub:}
-s/E=mc2/E=mc{super:2}/        # ^{} is deprecated, prefer {super:}
+s/H2O/H{sub=2}O/g           # ~{} is deprecated, prefer {sub=}
+s/E=mc2/E=mc{super=2}/        # ^{} is deprecated, prefer {super=}
 ```
 
 ### Combining Formats
@@ -354,39 +354,39 @@ This is the unified mechanism for inline styling. The `text` portion receives th
 
 Syntax | Effect | Status
 --- | --- | ---
-`{super:text}` | Superscript | ✅ STABLE
-`{sub:text}` | Subscript | ✅ STABLE
-`{color:#RRGGBB:text}` | Colored text | 🔮 PROPOSED
-`{font:name:text}` | Font family | 🔮 PROPOSED
-`{size:N:text}` | Font size | 🔮 PROPOSED
-`{bg:#RRGGBB:text}` | Background highlight | 🔮 PROPOSED
+`{super=text}` | Superscript | ✅ STABLE
+`{sub=text}` | Subscript | ✅ STABLE
+`{color=#RRGGBB:text}` | Colored text | 🔮 PROPOSED
+`{font=name:text}` | Font family | 🔮 PROPOSED
+`{size=N:text}` | Font size | 🔮 PROPOSED
+`{bg=#RRGGBB:text}` | Background highlight | 🔮 PROPOSED
 
 When used as a **whole-replacement attribute** (no `:text` suffix), the style applies to the entire replacement:
 
 Syntax | Effect | Status
 --- | --- | ---
-`{baseline:super}` | Entire replacement as superscript | ✅ STABLE
-`{baseline:sub}` | Entire replacement as subscript | ✅ STABLE
+`{baseline=super}` | Entire replacement as superscript | ✅ STABLE
+`{baseline=sub}` | Entire replacement as subscript | ✅ STABLE
 
 **Examples:**
 
 ```bash
 # Inline superscript/subscript
-s/E=mc2/E=mc{super:2}/
-s/H2O/H{sub:2}O/
-s/x squared/x{super:2}/
+s/E=mc2/E=mc{super=2}/
+s/H2O/H{sub=2}O/
+s/x squared/x{super=2}/
 
 # Whole-replacement superscript
-s/TM/{baseline:super}TM/
+s/TM/{baseline=super}TM/
 
 # Proposed: inline color
-s/error/{color:#FF0000:error}/
+s/error/{color=#FF0000:error}/
 
 # Proposed: inline font
-s/code/{font:Courier:code}/
+s/code/{font=Courier:code}/
 ```
 
-> **DEPRECATED**: The older `^{text}` (superscript) and `~{text}` (subscript) syntax is still supported for backward compatibility but `{super:text}` and `{sub:text}` are preferred.
+> **DEPRECATED**: The older `^{text}` (superscript) and `~{text}` (subscript) syntax is still supported for backward compatibility but `{super=text}` and `{sub=text}` are preferred.
 
 ### Footnotes ✅ STABLE
 
@@ -771,27 +771,46 @@ Character | Escape | Context
 
 ## Style Attributes — 🔮 PROPOSED
 
-> **Status**: PROPOSED — not yet implemented.
+> **Status**: PROPOSED — not yet implemented (except `{super=}`, `{sub=}`, `{baseline=}` which are STABLE).
 
-Curly brace attributes on sed commands, following Pandoc/kramdown convention:
+SEDMAT uses `{key:value}` curly brace syntax in two positions:
+
+### 1. Inline Spans (within replacement text)
+
+The `{key:value:text}` pattern applies a style to a portion of text. Superscript and subscript (`{super=}`, `{sub=}`) are STABLE; other style keys are PROPOSED:
 
 ```bash
-s/foo/bar/{font:Roboto size:14 color:#FF0000}
-s/title/# Report/{font:Montserrat size:28 break:page}
+# STABLE
+s/H2O/H{sub=2}O/
+s/TM/{super=TM}/
+
+# PROPOSED
+s/error/{color=#FF0000:error} detected/
+s/code/{font=Courier:monospaced text}/
+s/big/{size=24:large text}/
+```
+
+### 2. Expression-Level Attributes (after flags)
+
+Curly brace attributes after the closing delimiter apply to the entire replacement, following Pandoc/kramdown convention:
+
+```bash
+s/foo/bar/{font=Roboto size=14 color=#FF0000}
+s/title/# Report/{font=Montserrat size=28 break=page}
 ```
 
 ### Supported Attributes (Proposed)
 
-Attribute | Effect
---- | ---
-`font:name` | Font family
-`size:N` | Font size in points
-`color:#RRGGBB` | Text color
-`bg:#RRGGBB` | Background/highlight color
-`break:page` | Insert page break after
-`break:section` | Insert section break after
-
-Attributes appear in `{}` after the closing delimiter and flags, space-separated.
+Attribute | Inline `{k:v:text}` | Expression-level `/{k:v}` | Effect
+--- | --- | --- | ---
+`font:name` | 🔮 | 🔮 | Font family
+`size:N` | 🔮 | 🔮 | Font size in points
+`color:#RRGGBB` | 🔮 | 🔮 | Text color
+`bg:#RRGGBB` | 🔮 | 🔮 | Background/highlight color
+`super` / `sub` | ✅ | — | Super/subscript (inline span)
+`baseline:super\|sub` | ✅ | — | Whole-replacement baseline
+`break:page` | — | 🔮 | Insert page break after
+`break:section` | — | 🔮 | Insert section break after
 
 ## Document-Level Directives — 🔮 PROPOSED
 
@@ -800,9 +819,9 @@ Attributes appear in `{}` after the closing delimiter and flags, space-separated
 Standalone lines using `!^!{key:value ...}` for page-level settings:
 
 ```bash
-!^!{margin:1in size:letter orientation:portrait}
-!^!{header:Company Name header-font:Arial header-size:9}
-!^!{footer:Page {{page}} of {{pages}} footer-align:center}
+!^!{margin=1in size=letter orientation=portrait}
+!^!{header=Company Name header-font:Arial header-size:9}
+!^!{footer=Page {{page}} of {{pages}} footer-align:center}
 ```
 
 ### Supported Directives (Proposed)
@@ -865,8 +884,8 @@ super-sub      = inline-span / superscript-dep / subscript-dep
 inline-span    = "{" span-key ":" span-value [":" content] "}"
 span-key       = "super" / "sub" / "baseline" / "color" / "font" / "size" / "bg"
 span-value     = content
-superscript-dep = "^{" content "}"    ; DEPRECATED — use {super:text}
-subscript-dep  = "~{" content "}"     ; DEPRECATED — use {sub:text}
+superscript-dep = "^{" content "}"    ; DEPRECATED — use {super=text}
+subscript-dep  = "~{" content "}"     ; DEPRECATED — use {sub=text}
 
 footnote-expr  = "[^" content "]"
 
@@ -950,9 +969,9 @@ Horizontal rules (`---`, `***`, `___`) | ✅ Stable | REQUIRED
 Blockquotes (`> text`) | ✅ Stable | REQUIRED
 Code blocks (triple backtick) | ✅ Stable | REQUIRED
 Inline spans `{key:value:text}` | ✅ Stable | REQUIRED
-Superscript `{super:text}` | ✅ Stable | REQUIRED
-Subscript `{sub:text}` | ✅ Stable | REQUIRED
-Whole-replacement `{baseline:super\|sub}` | ✅ Stable | REQUIRED
+Superscript `{super=text}` | ✅ Stable | REQUIRED
+Subscript `{sub=text}` | ✅ Stable | REQUIRED
+Whole-replacement `{baseline=super\|sub}` | ✅ Stable | REQUIRED
 Legacy `^{text}`, `~{text}` (deprecated) | ✅ Stable | REQUIRED
 Footnotes `[^text]` | ✅ Stable | REQUIRED
 Delete command `d/pattern/` | ✅ Stable | REQUIRED
@@ -1139,7 +1158,7 @@ Circular reference | MUST detect and reject
 │   **text**    Bold          *text*      Italic                    │
 │   ~~text~~    Strike        `text`      Monospace                 │
 │   __text__    Underline     ***text***  Bold+Italic               │
-│   {super:t}   Superscript   {sub:t}     Subscript                 │
+│   {super=t}   Superscript   {sub=t}     Subscript                 │
 ├──────────────────────────────────────────────────────────────────┤
 │ HEADINGS & STRUCTURE                                              │
 │   # text      Heading 1     ## text     Heading 2                 │
@@ -1199,8 +1218,8 @@ Circular reference | MUST detect and reject
 - **Whole-match backreference**: `&` for entire match, `\&` for literal ampersand
 - **Dry-run mode**: `--dry-run` / `-n` flag for previewing changes
 - **Batch processing**: `-f file.sed` for reading expressions from files
-- **PROPOSED: Style attributes**: `{font:name size:N color:#RGB}` on expressions
-- **PROPOSED: Document directives**: `!^!{margin:1in orientation:portrait}` for page settings
+- **PROPOSED: Style attributes**: `{font=name size=N color=#RGB}` on expressions
+- **PROPOSED: Document directives**: `!^!{margin=1in orientation=portrait}` for page settings
 - Updated conformance levels: Level 4 (Commands & CLI) now REQUIRED
 - Updated ABNF grammar with all new commands, flags, and syntax
 - Reference implementation: [gogcli](https://github.com/steipete/gogcli) `gog docs sed`
