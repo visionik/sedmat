@@ -18,7 +18,7 @@ SEDMAT enables:
 - **Rich Formatting**: Brace syntax (`{b}`, `{c=red}`, `{h=1}`) as the canonical format
 - **Markdown Shortcuts**: Optional convenience layer (`**bold**`, `*italic*`) for those familiar with Markdown
 - **Structural Operations**: Headings, lists, tables, horizontal rules, blockquotes, code blocks
-- **Extended Commands**: `d/` (delete), `a/` (append), `i/` (insert), `y/` (transliterate)
+- **Extended sed Commands**: `d/` (delete), `a/` (append), `i/` (insert), `y/` (transliterate)
 - **Regex Power**: Full Extended Regular Expression (ERE) support with back-references
 - **Batch Processing**: Transform multiple elements via pipelines or `-f` batch files
 - **Dry-Run Mode**: Preview changes before applying
@@ -43,14 +43,20 @@ s/pattern/replacement/
 ### With Brace Formatting
 
 ```bash
-# Make "warning" bold (canonical brace syntax)
+# Make the first occurrence of warning bold
+s/warning/{b}/
+
+# Bold and preserve matched text explicitly
+s/warning/{b t=$0}/
+
+# or shorter, because t defaults to $0
+s/warning/{b t}/
+
+# or even shorter, because t defaults to being present
 s/warning/{b}/
 
 # Bold + red
 s/error/{b c=red}/
-
-# Bold and preserve matched text explicitly
-s/warning/{b t=$0}/
 
 # Wrap in link
 s/Google/{u=https://google.com}/
@@ -183,7 +189,7 @@ s/^line/LINE/m  # Multiline: ^ matches start of each line
 s/^line/LINE/gm # Multiline + global
 ```
 
-**Conformance**: Implementations MUST support `g`. Implementations MUST support `n` (nth occurrence) and `m` (multiline) flags.
+**Conformance**: Implementations MUST support `g`, `n` (nth occurrence), and `m` (multiline) flags.
 
 ### Delimiters ✅ STABLE
 
@@ -206,7 +212,7 @@ Implementations MUST support at minimum `/`, `#`, and `|` as delimiters.
 
 > **Status**: ✅ STABLE — Brace Syntax is the canonical formatting system in SEDMAT. All brace syntax features are REQUIRED for conformant implementations.
 
-Brace Syntax is the **primary formatting system** in SEDMAT replacement strings. It uses `{key value}` pairs inside curly braces to specify formatting, structural, and semantic attributes.
+Brace Syntax is the **primary formatting system** in SEDMAT replacement strings. It uses `{key=value}` pairs and `{flag}` toggles inside curly braces to specify formatting, structural, and semantic attributes.
 
 ### Overview
 
