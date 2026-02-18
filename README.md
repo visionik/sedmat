@@ -1,6 +1,6 @@
 # SEDMAT: Sed-Expression-Driven Markdown Annotation & Transformation
 
-**Version**: 3.0  
+**Version**: 3.1  
 **Last Updated**: 2026-02-18  
 **Status**: Draft
 
@@ -327,7 +327,7 @@ Value flags use `key=value` syntax. When a value flag appears **bare** (without 
 | `f` | `font` | Arial | Font family |
 | `s` | `size` | 11pt | Font size in points |
 | `u` | `url` | (strip link) | Link/URL/URI |
-| `h` | `heading` | NORMAL_TEXT | Heading level |
+| `h` | `heading` | HEADING_1 | Heading level |
 | `l` | `leading` | 1.15 | Line height |
 | `a` | `align` | left | Text alignment |
 | `o` | `opacity` | 100 | Opacity (percentage) |
@@ -384,7 +384,8 @@ The `h` flag controls heading level using compact shorthands:
 | `{h=4}` | HEADING_4 |
 | `{h=5}` | HEADING_5 |
 | `{h=6}` | HEADING_6 |
-| `{h}` (bare) | NORMAL_TEXT (reset heading) |
+| `{h}` (bare) | HEADING_1 (default heading) |
+| `{h=0}` | NORMAL_TEXT (reset heading) |
 
 **Examples:**
 
@@ -393,14 +394,15 @@ s/My Document/{h=t}/g         # Set as Title
 s/Overview/{h=s}/g            # Set as Subtitle
 s/Chapter 1/{h=1 b}/g         # Heading 1 + bold
 s/Section/{h=2}/g             # Heading 2
-s/normal paragraph/{h}/g      # Reset to normal text
+s/heading text/{h}/g          # Apply default heading (HEADING_1)
+s/normal paragraph/{h=0}/g    # Reset to normal text
 ```
 
 ### Superscript and Subscript ✅ STABLE
 
-SEDMAT provides three ways to handle super/subscript:
+SEDMAT provides boolean flags for super/subscript:
 
-#### 1. Boolean Flags: `{^}` and `{,}`
+#### Boolean Flags: `{^}` and `{,}`
 
 Apply to the entire replacement:
 
@@ -409,27 +411,14 @@ s/TM/{^}/g                    # "TM" as superscript
 s/2/{,}/g                     # "2" as subscript
 ```
 
-#### 2. Inline Wrappers: `{super=text}` and `{sub=text}`
-
-Apply to a portion of the replacement text:
+For partial super/subscript within a larger replacement, use multiple substitution expressions:
 
 ```bash
-s/E=mc2/E=mc{super=2}/g       # Only the "2" is superscript
-s/H2O/H{sub=2}O/g             # Only the "2" is subscript
-s/x squared/x{super=2}/g
-s/CO2/CO{sub=2}/g
+# E=mc² - apply superscript to the "2" separately
+s/E=mc2/E=mc²/g               # Use Unicode superscript character
+# Or use two passes
+s/mc2/mc{^}/g                 # Only affects "2" if matched
 ```
-
-#### 3. Whole-Replacement: `{baseline=super}` and `{baseline=sub}`
-
-Force the entire replacement to a specific baseline:
-
-```bash
-s/TM/{baseline=super}TM/g     # Explicit whole-replacement superscript
-s/note/{baseline=sub}note/g   # Entire "note" as subscript
-```
-
-**Processing Order**: `{super=text}` and `{sub=text}` are processed first to extract inline portions, then boolean flags `{^}` and `{,}` apply to remaining text.
 
 ### Breaks: `{+}` ✅ STABLE
 
@@ -550,7 +539,7 @@ Pulls chart at index `0` from the linked Sheet and embeds it at 600×400 pixels.
 #### 2. Unix Pipe Composition
 
 ```bash
-gog sheets chart SHEET_ID 0 --png | gog docs sed DOC_ID 's/PLACEHOLDER/!(-)/g'
+gog sheets chart SHEET_ID 0 --png | gog docs sed DOC_ID 's/PLACEHOLDER/{img=-1}/g'
 ```
 
 Export chart as image, then insert via pipe.
@@ -584,8 +573,7 @@ s/Chapter 1/{h=1 b}/g
 
 # Superscript and subscript
 s/TM/{^}/g
-s/E=mc2/E=mc{super=2}/g
-s/H2O/H{sub=2}O/g
+s/note/{,}/g
 
 # Breaks
 s/END/{+=p}/g
@@ -689,57 +677,61 @@ s/(https:\/\/\S+)/<$1>/g
 
 ## Images ✅ STABLE
 
-### Image Insertion
+### Standard Markdown Image Insertion (RECOMMENDED)
 
 | Syntax | Effect | Status |
 |--------|--------|--------|
-| `![](url)` | Image, no alt text | REQUIRED |
-| `!(url)` | Image, shorthand | REQUIRED |
-| `![alt](url)` | Image with alt text | REQUIRED |
-| `![alt](url "caption")` | Image with caption | RECOMMENDED |
-| `![](url){width=N}` | Width in pixels | REQUIRED |
-| `![](url){height=N}` | Height in pixels | REQUIRED |
-| `![](url){w=N h=M}` | Both dimensions | REQUIRED |
-| `![](url){x=N y=M}` | Brace syntax dimensions | REQUIRED |
+| `![](url)` | Image, no alt text | ✅ RECOMMENDED |
+| `![alt](url)` | Image with alt text | ✅ RECOMMENDED |
+| `![alt](url "caption")` | Image with caption | ✅ RECOMMENDED |
+| `![](url){x=N}` | Width in pixels | ✅ STABLE |
+| `![](url){y=N}` | Height in pixels | ✅ STABLE |
+| `![](url){x=N y=M}` | Both dimensions | ✅ STABLE |
 
 **Examples:**
 
 ```bash
-# Insert at placeholder
+# Insert at placeholder (standard markdown)
 s/{{LOGO}}/![](https:\/\/example.com\/logo.png)/
 
 # With alt text
 s/{{LOGO}}/![Company Logo](https:\/\/example.com\/logo.png)/
 
-# With dimensions
-s/{{HERO}}/![](https:\/\/example.com\/hero.jpg){width=600}/
-s/{{BANNER}}/!(https:\/\/example.com\/banner.png){x=800 y=200}/
+# With dimensions (brace syntax)
+s/{{HERO}}/![](https:\/\/example.com\/hero.jpg){x=600}/
+s/{{BANNER}}/![](https:\/\/example.com\/banner.png){x=800 y=200}/
 ```
 
-### Image References
+### Brace Image References ✅ STABLE
 
-Existing images MAY be referenced by position or alt text:
+> **Status**: ✅ STABLE — The `{img=}` brace syntax is the canonical way to reference existing images by position or pattern.
 
-| Pattern | Meaning | Status |
-|---------|---------|--------|
-| `!(1)` | First image | REQUIRED |
-| `!(2)` | Second image | REQUIRED |
-| `!(-1)` | Last image | REQUIRED |
-| `!(-2)` | Second to last | REQUIRED |
-| `!(*)` | All images | REQUIRED |
-| `![regex]` | Images matching alt text | REQUIRED |
+| Syntax | Meaning | Status |
+|--------|---------|--------|
+| `{img=1}` | First image | ✅ STABLE |
+| `{img=2}` | Second image | ✅ STABLE |
+| `{img=-1}` | Last image | ✅ STABLE |
+| `{img=-2}` | Second to last | ✅ STABLE |
+| `{img=*}` | All images | ✅ STABLE |
+| `{img=regex}` | Images matching alt text pattern | ✅ STABLE |
 
 **Examples:**
 
 ```bash
 # Replace first image
-s/!(1)/!(https:\/\/new-image.png)/
+s/{img=1}/![](https:\/\/new-image.png)/
 
 # Delete first image
-s/!(1)//
+s/{img=1}//
 
-# Replace by alt text
-s/![old-logo]/![new-logo](https:\/\/new.png)/
+# Replace last image
+s/{img=-1}/![](https:\/\/replacement.png)/
+
+# Replace by alt text pattern
+s/{img=old-logo}/![new-logo](https:\/\/new.png)/
+
+# Apply to all images
+s/{img=*}/{x=400}/
 ```
 
 ### Image Dimensions Grammar
@@ -753,211 +745,276 @@ height         = ("height" | "h" | "y") "=" number
 number         = DIGIT+
 ```
 
+### ⚠️ DEPRECATED: Custom Image Syntax
+
+> **Status**: ⚠️ DEPRECATED — The following custom image syntax is deprecated in favor of standard markdown and brace syntax. Implementations MAY support these for backward compatibility but SHOULD emit deprecation warnings.
+
+| Deprecated Syntax | Replacement | Notes |
+|-------------------|-------------|-------|
+| `!(url)` | `![](url)` | Use standard markdown syntax |
+| `!(1)` | `{img=1}` | Use brace image reference |
+| `!(-1)` | `{img=-1}` | Use brace image reference |
+| `!(*)` | `{img=*}` | Use brace image reference |
+| `![regex]` (alt-text match) | `{img=regex}` | Use brace image reference |
+
+**Migration examples:**
+
+```bash
+# DEPRECATED → RECOMMENDED
+s/PLACEHOLDER/!(https:\/\/img.png)/      # ❌ Deprecated
+s/PLACEHOLDER/![](https:\/\/img.png)/    # ✅ Standard markdown
+
+s/!(1)/new-image/                         # ❌ Deprecated
+s/{img=1}/new-image/                      # ✅ Brace syntax
+
+s/!(-1)//                                 # ❌ Deprecated
+s/{img=-1}//                              # ✅ Brace syntax
+
+s/![old-logo]/![new-logo](url)/          # ❌ Deprecated
+s/{img=old-logo}/![new-logo](url)/       # ✅ Brace syntax
+```
+
 ---
 
 ## Tables ✅ STABLE
 
-### Table References
+### Unified Brace Addressing: `{T=}` ✅ STABLE
 
-| Pattern | Meaning | Status |
-|---------|---------|--------|
-| &#124;1&#124; | First table | REQUIRED |
-| &#124;2&#124; | Second table | REQUIRED |
-| &#124;-1&#124; | Last table | REQUIRED |
-| &#124;*&#124; | All tables | REQUIRED |
+> **Status**: ✅ STABLE — The `{T=}` key is the canonical brace-based addressing syntax for tabular data across Google Docs tables and Google Sheets. This is the primary syntax for all table operations.
 
-### Table Creation
-
-```bash
-# Create 3×4 table (3 rows, 4 columns)
-s/{{TABLE}}/|3x4|/
-
-# With header flag
-s/{{TABLE}}/|3x4:header|/
-
-# Create table in empty document
-s/^$/|3x4|/
-```
-
-**Limits**: Implementations SHOULD support 1–100 rows and 1–26 columns.
-
-### Pipe Table Syntax
-
-Markdown pipe table syntax is parsed into native tables:
-
-```bash
-s/PLACEHOLDER/| Name | Age | City |\n| Alice | 30 | NYC |\n| Bob | 25 | LA |/
-```
-
-The `|` delimited rows are parsed and converted to a native table. Header detection follows standard Markdown rules (separator row with `---`).
-
-### Table Deletion
-
-```bash
-# Delete first table
-s/|1|//
-
-# Delete all tables
-s/|*|//
-```
-
-### Cell References
-
-| Pattern | Meaning | Status |
-|---------|---------|--------|
-| &#124;1&#124;[A1] | Cell A1 (Excel-style) | ✅ STABLE |
-| &#124;1&#124;[1,1] | Row 1, Col 1 (1-indexed) | ✅ STABLE |
-| &#124;1&#124;[1,*] | Entire row 1 (wildcard) | ✅ STABLE |
-| &#124;1&#124;[*,2] | Entire column 2 (wildcard) | ✅ STABLE |
-| &#124;1&#124;[*,*] | All cells | ✅ STABLE |
-| &#124;1&#124;[A1:C3] | Range A1 to C3 | 🔮 PROPOSED |
-
-**Examples:**
-
-```bash
-# Set cell content
-s/|1|[A1]/Name/
-s/|1|[B1]/Value/
-
-# Bold entire header row
-s/|1|[1,*]/{b}/
-
-# Find/replace within specific cell
-s/|1|[A1]:old/new/
-
-# Find/replace across entire table
-s/|1|[*,*]:TODO/DONE/g
-```
-
-### Row Operations
-
-| Pattern | Meaning | Status |
-|---------|---------|--------|
-| &#124;1&#124;[row:2] | Delete row 2 | ✅ STABLE |
-| &#124;1&#124;[row:-1] | Delete last row | ✅ STABLE |
-| &#124;1&#124;[row:+2] | Insert row before row 2 | ✅ STABLE |
-| &#124;1&#124;[row:$+] | Append row at end | ✅ STABLE |
-
-### Column Operations
-
-| Pattern | Meaning | Status |
-|---------|---------|--------|
-| &#124;1&#124;[col:2] | Delete column 2 | ✅ STABLE |
-| &#124;1&#124;[col:-1] | Delete last column | ✅ STABLE |
-| &#124;1&#124;[col:+2] | Insert column before column 2 | ✅ STABLE |
-| &#124;1&#124;[col:$+] | Append column at end | ✅ STABLE |
-
-### Table Merge
-
-Merge a range of cells in a table:
-
-```bash
-s/|1|[r1,c1:r2,c2]/merge/
-```
-
-Merges cells from row `r1`, column `c1` to row `r2`, column `c2` (1-indexed).
-
-```bash
-# Merge A1:C1 (first 3 columns of row 1 as a header span)
-s/|1|[1,1:1,3]/merge/
-
-# Merge a 2x2 block
-s/|1|[2,1:3,2]/merge/
-```
-
-### Unified Brace Addressing — 🔮 PROPOSED
-
-> **Status**: PROPOSED — The `T=` key provides a unified brace-based addressing syntax for tabular data across Google Docs tables and Google Sheets. This is the future direction for table/sheet operations.
-
-The `T=` key uses `!` as the mode switch: the `!` separator (following Excel/Sheets convention) enters sheet context. An optional `DOC_ID:` prefix enables cross-document references.
+The `{T=}` key uses `!` as the mode switch: the `!` separator (following Excel/Sheets convention) enters cell context. An optional `DOC_ID:` prefix enables cross-document references.
 
 #### Syntax
 
 ```
-{T=[doc:]sheet!cell}
-{T=[doc:]sheet!range}
-{T=[doc:]sheet!row-or-col-op}
+{T=table!cell}
+{T=table!range}
+{T=table!row-or-col-op}
+{T=[doc:]sheet!cell}        # For Sheets
 ```
 
 | Component | Meaning | Examples |
 |-----------|---------|----------|
+| `table` | Table reference (1-indexed, negative for reverse) | `1`, `-1`, `*` |
 | `doc:` | Document ID (optional, for cross-doc refs) | `1f1W9Wd...:`  |
 | `sheet` | Sheet tab by name or 0-based index | `Sales`, `0`, `Budget` |
-| `!` | Sheet/cell separator | |
+| `!` | Table/cell separator | |
 | `cell` | Cell address (Excel-style) | `A1`, `B3` |
 | `range` | Cell range | `A1:C3`, `A:A`, `2:2` |
-| `*` | Wildcard (entire sheet) | `0!*` |
+| `*` | Wildcard (entire table/row/column) | `1!*`, `1!1,*` |
 | `row=`/`col=` | Row/column operations | `row=$+`, `col=+3` |
+
+#### Table References
+
+```bash
+# Reference tables by position
+s/{T=1!A1}/Name/              # First table, cell A1
+s/{T=-1!B2}/Value/            # Last table, cell B2
+s/{T=*!1,*}/{b}/              # All tables, entire row 1
+```
 
 #### Cell & Range Access
 
 ```bash
-# Cell in first sheet
-s/{T=0!A1}/{t=Revenue b}/
+# Cell in first table
+s/{T=1!A1}/{t=Revenue b}/
 
-# Cell in named tab
-s/{T=Budget!C5}/{t=$$1,234 b c=green}/
+# Cell by row,col notation (1-indexed)
+s/{T=1!2,3}/{t=Data}/
 
 # Range
-s/{T=Sales!A1:C3}/{b}/
+s/{T=1!A1:C3}/{b}/
 
 # Entire column A
-s/{T=0!A:A}/{c=blue}/
+s/{T=1!A:A}/{c=blue}/
 
 # Entire row 2
-s/{T=0!2:2}/{b z=#eeeeee}/
+s/{T=1!2:2}/{b z=#eeeeee}/
 
-# Entire sheet (all cells)
-s/{T=0!*}/{0}/
+# Entire table (all cells)
+s/{T=1!*}/{0}/
+
+# Wildcard: entire row
+s/{T=1!1,*}/{b}/              # Bold entire row 1
+
+# Wildcard: entire column
+s/{T=1!*,2}/{i}/              # Italicize entire column 2
 ```
 
 #### Row & Column Operations
 
 ```bash
-# Append row to first sheet
-s/{T=0!row=$+}//
+# Append row to first table
+s/{T=1!row=$+}//
 
-# Insert column before column 3
-s/{T=0!col=+3}//
+# Insert row before row 2
+s/{T=1!row=+2}//
 
 # Delete row 5
-s/{T=Budget!row=5}//
+s/{T=1!row=5}//
+
+# Insert column before column 3
+s/{T=1!col=+3}//
+
+# Delete last column
+s/{T=1!col=-1}//
+
+# Append column at end
+s/{T=1!col=$+}//
 ```
 
-#### Cross-Document References
+#### Table Creation
+
+```bash
+# Create 3×4 table (3 rows, 4 columns)
+s/{{TABLE}}/{T=3x4}/
+
+# With header flag
+s/{{TABLE}}/{T=3x4:header}/
+
+# Create table in empty document
+s/^$/{T=3x4}/
+```
+
+#### Table Deletion
+
+```bash
+# Delete first table
+s/{T=1}//
+
+# Delete last table
+s/{T=-1}//
+
+# Delete all tables
+s/{T=*}//
+```
+
+#### Table Merge
+
+```bash
+# Merge cells in a table
+s/{T=1!A1:C1}/merge/
+
+# Merge a 2x2 block
+s/{T=1!2,1:3,2}/merge/
+```
+
+#### Cross-Document/Sheet References
 
 ```bash
 # Reference cell in another doc's sheet
 s/{T=1f1W9Wd...:Sales!A1}/{t=Updated}/
 
-# Copy formatting across docs
-s/{T=DOC_ID:0!A1:A10}/{b c=red}/
-```
+# Reference named sheet tab
+s/{T=Budget!C5}/{t=$$1,234 b c=green}/
 
-#### Merge
-
-```bash
-# Merge cells in a sheet
-s/{T=0!A1:C1}/merge/
-
-# Merge in named tab
-s/{T=Summary!B2:D4}/merge/
+# Format entire sheet header row
+s/{T=0!1:1}/{b z=#333 c=white}/
 ```
 
 #### Combined with Brace Formatting
 
 ```bash
 # Set value + bold + color
-s/{T=Sales!B2}/{t=$$42,000 b c=green}/
+s/{T=1!B2}/{t=$$42,000 b c=green}/
 
 # Bold an entire header row
-s/{T=0!1:1}/{b z=#333 c=white}/
+s/{T=1!1,*}/{b z=#333 c=white}/
 
 # Format column as currency
-s/{T=Budget!C:C}/{c=green b}/
+s/{T=1!C:C}/{c=green b}/
 ```
 
-> **Note**: Docs table syntax (`|1|[A1]`, `|1|[row:+2]`, etc.) remains supported as a stable shorthand for inline document tables. The `T=` brace syntax is the unified addressing model for both Docs tables and Sheets.
+### ⚠️ DEPRECATED: Pipe Table Syntax
+
+> **Status**: ⚠️ DEPRECATED — All pipe-based table syntax is deprecated in favor of the unified `{T=}` brace addressing. Implementations MAY support these for backward compatibility but SHOULD emit deprecation warnings.
+
+#### ⚠️ DEPRECATED: Table References
+
+| Deprecated Syntax | Replacement | Notes |
+|-------------------|-------------|-------|
+| &#124;1&#124; | `{T=1}` | Use brace table reference |
+| &#124;2&#124; | `{T=2}` | Use brace table reference |
+| &#124;-1&#124; | `{T=-1}` | Use brace table reference |
+| &#124;*&#124; | `{T=*}` | Use brace table reference |
+
+#### ⚠️ DEPRECATED: Table Creation
+
+| Deprecated Syntax | Replacement | Notes |
+|-------------------|-------------|-------|
+| &#124;3x4&#124; | `{T=3x4}` | Use brace table creation |
+| &#124;3x4:header&#124; | `{T=3x4:header}` | Use brace table creation |
+
+#### ⚠️ DEPRECATED: Cell References
+
+| Deprecated Syntax | Replacement | Notes |
+|-------------------|-------------|-------|
+| &#124;1&#124;[A1] | `{T=1!A1}` | Use brace cell reference |
+| &#124;1&#124;[1,1] | `{T=1!1,1}` | Use brace cell reference |
+| &#124;1&#124;[1,*] | `{T=1!1,*}` | Use brace wildcard |
+| &#124;1&#124;[*,2] | `{T=1!*,2}` | Use brace wildcard |
+| &#124;1&#124;[*,*] | `{T=1!*}` | Use brace wildcard |
+| &#124;1&#124;[A1:C3] | `{T=1!A1:C3}` | Use brace range |
+
+#### ⚠️ DEPRECATED: Row Operations
+
+| Deprecated Syntax | Replacement | Notes |
+|-------------------|-------------|-------|
+| &#124;1&#124;[row:2] | `{T=1!row=2}` | Use brace row delete |
+| &#124;1&#124;[row:-1] | `{T=1!row=-1}` | Use brace row delete |
+| &#124;1&#124;[row:+2] | `{T=1!row=+2}` | Use brace row insert |
+| &#124;1&#124;[row:$+] | `{T=1!row=$+}` | Use brace row append |
+
+#### ⚠️ DEPRECATED: Column Operations
+
+| Deprecated Syntax | Replacement | Notes |
+|-------------------|-------------|-------|
+| &#124;1&#124;[col:2] | `{T=1!col=2}` | Use brace column delete |
+| &#124;1&#124;[col:-1] | `{T=1!col=-1}` | Use brace column delete |
+| &#124;1&#124;[col:+2] | `{T=1!col=+2}` | Use brace column insert |
+| &#124;1&#124;[col:$+] | `{T=1!col=$+}` | Use brace column append |
+
+#### ⚠️ DEPRECATED: Pipe Table Literal Syntax
+
+Markdown pipe table syntax is deprecated for creating tables:
+
+```bash
+# ❌ DEPRECATED
+s/PLACEHOLDER/| Name | Age | City |\n| Alice | 30 | NYC |\n| Bob | 25 | LA |/
+
+# ✅ RECOMMENDED: Create table then populate cells
+s/PLACEHOLDER/{T=3x3}/
+s/{T=1!A1}/Name/
+s/{T=1!B1}/Age/
+s/{T=1!C1}/City/
+# ... etc
+```
+
+**Migration examples:**
+
+```bash
+# DEPRECATED → RECOMMENDED
+
+# Table reference
+s/|1|//                       # ❌ Deprecated
+s/{T=1}//                     # ✅ Brace syntax
+
+# Cell reference
+s/|1|[A1]/Name/               # ❌ Deprecated  
+s/{T=1!A1}/Name/              # ✅ Brace syntax
+
+# Row operations
+s/|1|[row:$+]//               # ❌ Deprecated
+s/{T=1!row=$+}//              # ✅ Brace syntax
+
+# Bold header row
+s/|1|[1,*]/{b}/               # ❌ Deprecated
+s/{T=1!1,*}/{b}/              # ✅ Brace syntax
+
+# Table creation
+s/{{TABLE}}/|3x4|/            # ❌ Deprecated
+s/{{TABLE}}/{T=3x4}/          # ✅ Brace syntax
+```
 
 ---
 
@@ -990,7 +1047,7 @@ s/^/{h=t t=Document Title}\n/
 s/$/\nGenerated on 2026-02-17/
 
 # Insert table at start
-s/^/|3x4|\n/
+s/^/{T=3x4}\n/
 ```
 
 Positional insert MUST support all replacement features (formatting, images, tables, headings, lists, etc.).
@@ -1053,7 +1110,7 @@ Required when formatting is present:
 ```bash
 s/foo/{b}/g                            # Brace syntax
 s/bar/{u=https://bar.com}/g            # Link
-s/{{IMG}}/!(https://img.png)/          # Image
+s/{{IMG}}/![](https://img.png)/        # Image
 ```
 
 ---
@@ -1082,21 +1139,20 @@ Characters with special meaning MUST be escaped with backslash:
 
 ## Markdown Formatting — Convenience Alternatives
 
-> **Note**: This section describes Markdown shortcuts that serve as a convenience layer. The canonical formatting system is [Brace Syntax](#brace-syntax--canonical-formatting-dsl--stable). Implementations MUST support brace syntax; Markdown shortcuts are RECOMMENDED.
+> **Note**: This section describes Markdown shortcuts that serve as a convenience layer. The canonical formatting system is [Brace Syntax](#brace-syntax--canonical-formatting-dsl--stable). Implementations MUST support brace syntax; Markdown shortcuts are RECOMMENDED for standard CommonMark syntax.
 
 For users familiar with Markdown, SEDMAT supports common Markdown formatting syntax as an alternative to brace syntax. These produce identical output.
 
-### Inline Styles
+### Inline Styles (RECOMMENDED — Standard CommonMark)
 
-| Syntax | Brace Equivalent | Effect |
-|--------|------------------|--------|
-| `**text**` | `{b t=text}` | Bold |
-| `*text*` | `{i t=text}` | Italic |
-| `_text_` | `{i t=text}` | Italic |
-| `***text***` | `{b i t=text}` | Bold + Italic |
-| `~~text~~` | `{- t=text}` | Strikethrough |
-| `` `text` `` | `{# t=text}` | Monospace |
-| `__text__` | `{_ t=text}` | Underline |
+| Syntax | Brace Equivalent | Effect | Status |
+|--------|------------------|--------|--------|
+| `**text**` | `{b t=text}` | Bold | ✅ RECOMMENDED |
+| `*text*` | `{i t=text}` | Italic | ✅ RECOMMENDED |
+| `_text_` | `{i t=text}` | Italic | ✅ RECOMMENDED |
+| `***text***` | `{b i t=text}` | Bold + Italic | ✅ RECOMMENDED |
+| `~~text~~` | `{- t=text}` | Strikethrough | ✅ RECOMMENDED |
+| `` `text` `` | `{# t=text}` | Monospace | ✅ RECOMMENDED |
 
 **Examples:**
 
@@ -1112,7 +1168,21 @@ s/deprecated/~~deprecated~~/g # Markdown
 s/deprecated/{-}/g            # Brace (preferred)
 ```
 
-### Headings
+### ⚠️ DEPRECATED: Non-Standard Markdown Syntax
+
+| Deprecated Syntax | Replacement | Notes |
+|-------------------|-------------|-------|
+| `__text__` | `{_ t=text}` | Not standard CommonMark (CommonMark treats `__` as bold/italic). Use `{_}` for underline. |
+
+```bash
+# ❌ DEPRECATED
+s/term/__term__/g             # Non-standard underline
+
+# ✅ RECOMMENDED  
+s/term/{_}/g                  # Brace syntax underline
+```
+
+### Headings (RECOMMENDED — Standard CommonMark)
 
 | Syntax | Brace Equivalent | Effect |
 |--------|------------------|--------|
@@ -1134,7 +1204,7 @@ s/Introduction/## Introduction/  # Markdown
 s/Introduction/{h=2}/            # Brace (preserves text)
 ```
 
-### Lists
+### Lists (RECOMMENDED — Standard CommonMark)
 
 | Syntax | Effect |
 |--------|--------|
@@ -1158,7 +1228,7 @@ s/STEPS/1. Step one\n2. Step two\n3. Step three/
 s/OUTLINE/- Top level\n  - Nested L1\n    - Nested L2/
 ```
 
-### Horizontal Rules
+### Horizontal Rules (RECOMMENDED — Standard CommonMark)
 
 Three or more of `-`, `*`, or `_` on a line create a horizontal rule:
 
@@ -1170,7 +1240,7 @@ s/SEPARATOR/___/
 
 Brace equivalent: `{+}`
 
-### Blockquotes
+### Blockquotes (RECOMMENDED — Standard CommonMark)
 
 Lines prefixed with `>` create blockquotes (left-indented with grey left border):
 
@@ -1179,7 +1249,7 @@ s/QUOTE/> This is a blockquote/
 s/EPIGRAPH/> To be or not to be\n> That is the question/
 ```
 
-### Code Blocks
+### Code Blocks (RECOMMENDED — Standard CommonMark)
 
 Triple backtick fences create code blocks (Courier New font, grey background). Language hints after the opening fence are stripped:
 
@@ -1188,7 +1258,7 @@ s/CODE/```\nfunction hello() {\n  console.log("hi");\n}\n```/
 s/SNIPPET/```python\nprint("hello")\n```/
 ```
 
-### Footnotes
+### Footnotes (RECOMMENDED)
 
 The `[^text]` syntax creates native footnotes in the target document:
 
@@ -1196,6 +1266,8 @@ The `[^text]` syntax creates native footnotes in the target document:
 s/citation/[^See Smith et al., 2024]/
 s/note/[^This is a footnote with detailed explanation]/
 ```
+
+> **Note**: While not part of CommonMark core, footnote syntax (`[^...]`) is widely supported in extended Markdown flavors and is RECOMMENDED.
 
 ### Combining Markdown Formats
 
@@ -1205,8 +1277,8 @@ Formats MAY be nested according to Markdown precedence:
 # Bold AND italic
 s/warning/***warning***/
 
-# Bold and underline
-s/critical/**__critical__**/
+# Bold with brace underline
+s/critical/**{_ t=critical}**/
 ```
 
 **Processing Order:**
@@ -1214,16 +1286,36 @@ s/critical/**__critical__**/
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
 graph LR
-    TEXT[text] --> U["__underline__"]
-    U --> B["**bold**"]
+    TEXT[text] --> B["**bold**"]
     B --> I["*italic*"]
-    I --> FINAL["***__text__***"]
+    I --> FINAL["***text***"]
     
     style TEXT fill:#2a2a2a,color:#ffffff,stroke:#555555
     style FINAL fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
 ```
 
 Implementations MUST process nesting from innermost to outermost.
+
+### ⚠️ DEPRECATED: Inline Wrappers
+
+> **Status**: ⚠️ DEPRECATED — The `{super=text}` and `{sub=text}` inline wrapper syntax is deprecated. Use `{^}` and `{,}` boolean flags instead.
+
+| Deprecated Syntax | Replacement | Notes |
+|-------------------|-------------|-------|
+| `{super=text}` | `{^ t=text}` | Use boolean flag with explicit text |
+| `{sub=text}` | `{, t=text}` | Use boolean flag with explicit text |
+
+**Migration examples:**
+
+```bash
+# ❌ DEPRECATED
+s/E=mc2/E=mc{super=2}/g       # Inline wrapper
+
+# ✅ RECOMMENDED (two-pass approach for partial formatting)
+s/mc2/mc²/g                   # Use Unicode superscript
+# Or match and replace just the portion:
+s/2/{^}/g                     # When "2" is the full match
+```
 
 ---
 
@@ -1256,17 +1348,17 @@ flags          = *( "g" / DIGIT / "m" )
 
 ; --- Replacement ---
 replacement    = *( plain-text / brace-expr / format-expr / back-ref / image-expr
-                   / link-expr / table-expr / heading-expr / list-expr
+                   / link-expr / heading-expr / list-expr
                    / block-expr / footnote-expr )
 
-; --- Brace Syntax (v3.0) ---
+; --- Brace Syntax (v3.1) ---
 brace-expr     = "{" brace-body "}"
 brace-body     = reset-all / brace-flags
 reset-all      = "0" *( SP brace-flag )                  ; {0} or {0 b i}
 
 brace-flags    = brace-flag *( SP brace-flag )
 brace-flag     = bool-flag / neg-flag / value-flag / break-flag
-                 / comment-flag / bookmark-flag / inline-wrapper
+                 / comment-flag / bookmark-flag / table-flag / image-flag
 
 bool-flag      = "b" / "bold" / "i" / "italic" / "_" / "underline"
                  / "-" / "strike" / "#" / "code" / "^" / "sup"
@@ -1292,11 +1384,26 @@ comment-text   = 1*(%x20-7E)                             ; Printable ASCII incl.
 bookmark-flag  = "@" "=" bookmark-name
 bookmark-name  = 1*(%x21-7E)
 
-inline-wrapper = ("super" / "sub") "=" wrapper-text
-wrapper-text   = 1*(%x21-7E)
+; --- Table Brace Syntax (v3.1) ---
+table-flag     = "T" "=" table-spec
+table-spec     = table-create / table-ref-spec
+table-create   = DIGIT+ "x" DIGIT+ [":header"]           ; {T=3x4}, {T=3x4:header}
+table-ref-spec = table-index ["!" cell-spec]
+table-index    = ["-"] DIGIT+ / "*"                      ; 1, -1, *
+cell-spec      = excel-cell / row-col-cell / cell-range / row-op / col-op / wildcard
+excel-cell     = ALPHA+ DIGIT+                           ; A1, B12
+row-col-cell   = (DIGIT+ / "*") "," (DIGIT+ / "*")       ; 1,2 or 1,* or *,2
+cell-range     = (excel-cell / row-col-cell) ":" (excel-cell / row-col-cell)
+row-op         = "row" "=" ("+" DIGIT+ / "$+" / ["-"] DIGIT+)
+col-op         = "col" "=" ("+" DIGIT+ / "$+" / ["-"] DIGIT+)
+wildcard       = "*"
 
-heading-value  = "t" / "s" / "1" / "2" / "3" / "4" / "5" / "6"
-                 ; t=TITLE, s=SUBTITLE, 1-6=HEADING_1-6
+; --- Image Brace Syntax (v3.1) ---
+image-flag     = "img" "=" image-spec
+image-spec     = ["-"] DIGIT+ / "*" / regex-pattern      ; 1, -1, *, pattern
+
+heading-value  = "t" / "s" / "0" / "1" / "2" / "3" / "4" / "5" / "6"
+                 ; t=TITLE, s=SUBTITLE, 0=NORMAL_TEXT, 1-6=HEADING_1-6
 
 uri-value      = standard-uri / chip-uri / bookmark-uri
 standard-uri   = scheme ":" *(%x21-7E)
@@ -1308,14 +1415,15 @@ chip-type      = "person" / "date" / "file" / "place"
 bookmark-uri   = "#" bookmark-name                        ; {u=#name}
 
 ; --- Markdown Formatting (convenience layer) ---
-format-expr    = bold / italic / bold-italic / strike / mono / underline
+format-expr    = bold / italic / bold-italic / strike / mono
 
 bold           = "**" content "**"
 italic         = "*" content "*" / "_" content "_"
 bold-italic    = "***" content "***"
 strike         = "~~" content "~~"
 mono           = "`" content "`"
-underline      = "__" content "__"
+
+; DEPRECATED: underline = "__" content "__"
 
 footnote-expr  = "[^" content "]"
 
@@ -1336,10 +1444,13 @@ back-ref       = "$" DIGIT / "\" DIGIT / "&" / "$$"
 link-expr      = "[" link-text "](" url [SP "\"" title "\""] ")"
                / "<" url ">"
 
-image-expr     = image-insert / image-ref
+image-expr     = image-insert / image-brace-ref
 image-insert   = "![" [alt-text] "](" url ")" [dimensions]
-               / "!(" url ")" [dimensions]
-image-ref      = "!(" index ")" / "![" regex "]"
+image-brace-ref = "{" "img" "=" image-spec "}"
+
+; DEPRECATED: image-shorthand = "!(" url ")" [dimensions]
+; DEPRECATED: image-pos-ref = "!(" index ")"
+; DEPRECATED: image-alt-ref = "![" regex "]"
 
 dimensions     = "{" *( dim-spec SP ) "}"
 dim-spec       = ("width" | "w" | "x") "=" NUMBER
@@ -1347,21 +1458,12 @@ dim-spec       = ("width" | "w" | "x") "=" NUMBER
 
 positional-pat = "^$" / "^" / "$"
 
-; --- Tables ---
-table-ref      = "|" index "|"
-table-create   = "|" rows "x" cols [":header"] "|"
-pipe-table     = pipe-row *(LF pipe-row)
-pipe-row       = "|" cell *("|" cell) "|"
-
-cell-ref       = table-ref "[" cell-spec "]"
-cell-spec      = excel-ref / row-col / wildcard-ref / row-op / col-op / merge-range
-excel-ref      = ALPHA+ DIGIT+
-row-col        = (DIGIT+ / "*") "," (DIGIT+ / "*")
-wildcard-ref   = "*" "," "*"
-row-op         = "row:" ("+" DIGIT+ / "$+" / ["-"] DIGIT+)
-col-op         = "col:" ("+" DIGIT+ / "$+" / ["-"] DIGIT+)
-merge-range    = (DIGIT+ / ALPHA+DIGIT+) "," (DIGIT+ / ALPHA+DIGIT+) ":"
-                 (DIGIT+ / ALPHA+DIGIT+) "," (DIGIT+ / ALPHA+DIGIT+)
+; --- Tables (DEPRECATED pipe syntax, use {T=} instead) ---
+; DEPRECATED: table-ref      = "|" index "|"
+; DEPRECATED: table-create   = "|" rows "x" cols [":header"] "|"
+; DEPRECATED: pipe-table     = pipe-row *(LF pipe-row)
+; DEPRECATED: pipe-row       = "|" cell *("|" cell) "|"
+; DEPRECATED: cell-ref       = table-ref "[" cell-spec "]"
 ```
 
 ---
@@ -1376,28 +1478,27 @@ merge-range    = (DIGIT+ / ALPHA+DIGIT+) "," (DIGIT+ / ALPHA+DIGIT+) ":"
 - Brace syntax: value flags (`{c=}`, `{z=}`, `{f=}`, `{s=}`, `{u=}`, `{t=}`, `{l=}`, `{a=}`, `{o=}`, `{n=}`, `{k=}`, `{x=}`, `{y=}`, `{p=}`, `{h=}`, `{e=}`)
 - Brace syntax: reset (`{0}`)
 - Brace syntax: implicit `t=$0` behavior
+- Brace syntax: `{h}` defaults to HEADING_1, `{h=0}` for NORMAL_TEXT
 - Back-references: `$1`-`$9`, `$0`, `&`, `$$` escaping
 - Links: `[text](url)`, `<url>`, `{u=url}`
 
 ### Level 2: Extended (REQUIRED)
 
 - All Level 1 features
-- Image insertion: `![alt](url)`, `!(url)`
-- Image dimensions: `{width=N}`, `{height=N}`, `{x=N y=M}`
-- Image references: `!(n)`, `!(-n)`, `!(*)`
-- Alt-text matching: `![regex]`
-- Brace syntax: heading shorthands (`{h=t}`, `{h=s}`, `{h=1}`–`{h=6}`)
-- Brace syntax: superscript/subscript (`{^}`, `{,}`, `{super=text}`, `{sub=text}`, `{baseline=super|sub}`)
+- Image insertion: `![alt](url)`, `![](url)` (standard markdown)
+- Image dimensions: `{x=N}`, `{y=N}`, `{x=N y=M}`
+- Image brace references: `{img=n}`, `{img=-n}`, `{img=*}`, `{img=regex}`
+- Brace syntax: heading shorthands (`{h=t}`, `{h=s}`, `{h=1}`–`{h=6}`, `{h=0}`)
 
 ### Level 3: Structural (REQUIRED)
 
 - All Level 2 features
 - Positional insert: `^$`, `^`, `$`
-- Table creation: `|RxC|`, `|RxC:header|`, pipe table syntax
-- Table deletion: `|N|`, `|-N|`, `|*|`
-- Cell references: `[A1]`, `[R,C]`, wildcards
-- Row/column operations
-- Table merge
+- Table brace syntax: `{T=RxC}`, `{T=RxC:header}` (creation)
+- Table brace references: `{T=1}`, `{T=-1}`, `{T=*}` (reference/deletion)
+- Table brace cell access: `{T=1!A1}`, `{T=1!R,C}`, wildcards
+- Table brace row/column operations: `{T=1!row=+N}`, `{T=1!col=$+}`, etc.
+- Table merge: `{T=1!A1:C3}/merge/`
 - Brace syntax: breaks (`{+}`, `{+=p}`, `{+=c}`, `{+=s}`)
 - Brace syntax: comments (`{"=text}`)
 - Brace syntax: bookmarks (`{@=name}`, `{u=#name}`)
@@ -1422,18 +1523,19 @@ merge-range    = (DIGIT+ / ALPHA+DIGIT+) "," (DIGIT+ / ALPHA+DIGIT+) ":"
 ### Level 6: Markdown Convenience (RECOMMENDED)
 
 - All Level 5 features
-- Markdown shortcuts: `**bold**`, `*italic*`, `` `mono` ``, `~~strike~~`, `__underline__`
+- Markdown shortcuts: `**bold**`, `*italic*`, `` `mono` ``, `~~strike~~`
 - Markdown headings: `#` through `######`
 - Markdown lists: `- bullet`, `1. numbered`, nested
 - Markdown blocks: `---` (horizontal rule), `> quote`, ``` code blocks ```
 - Footnotes: `[^text]`
 
-### Level 7: Advanced (OPTIONAL)
+### Level 7: Backward Compatibility (OPTIONAL)
 
 - All Level 6 features
-- Range references (`[A1:C3]`)
-- Cell styling
-- @ mentions
+- DEPRECATED pipe table syntax: `|N|`, `|RxC|`, `|N|[A1]`, etc. (emit warnings)
+- DEPRECATED custom image syntax: `!(url)`, `!(n)`, `![regex]` (emit warnings)
+- DEPRECATED `__underline__` markdown syntax (emit warnings)
+- DEPRECATED `{super=text}`, `{sub=text}` inline wrappers (emit warnings)
 
 ---
 
@@ -1451,42 +1553,51 @@ merge-range    = (DIGIT+ / ALPHA+DIGIT+) "," (DIGIT+ / ALPHA+DIGIT+) ":"
 | Brace syntax: value flags (`c=`, `z=`, `f=`, `s=`, etc.) | ✅ Stable | REQUIRED |
 | Brace syntax: text flag (`t=`) with implicit `$0` | ✅ Stable | REQUIRED |
 | Brace syntax: reset (`{0}`) | ✅ Stable | REQUIRED |
-| Brace syntax: heading shorthands (`h=t`, `h=1`, etc.) | ✅ Stable | REQUIRED |
+| Brace syntax: heading shorthands (`h=t`, `h=1`, `{h}` → HEADING_1) | ✅ Stable | REQUIRED |
+| Brace syntax: `{h=0}` for NORMAL_TEXT | ✅ Stable | REQUIRED |
 | Brace syntax: breaks (`{+}`, `{+=p}`, etc.) | ✅ Stable | REQUIRED |
 | Brace syntax: comments (`{"=text}`) | ✅ Stable | REQUIRED |
 | Brace syntax: bookmarks (`{@=name}`) | ✅ Stable | REQUIRED |
 | Brace syntax: URL/link (`u=`) | ✅ Stable | REQUIRED |
 | Brace syntax: `chip://` smart chips | ✅ Stable | REQUIRED |
-| Brace syntax: superscript/subscript (`{^}`, `{,}`, `{super=}`, `{sub=}`) | ✅ Stable | REQUIRED |
+| Brace syntax: superscript/subscript (`{^}`, `{,}`) | ✅ Stable | REQUIRED |
+| Brace syntax: table addressing (`{T=}`) | ✅ Stable | REQUIRED |
+| Brace syntax: image references (`{img=}`) | ✅ Stable | REQUIRED |
 | Back-references `$1`-`$9`, `$0`, `&` | ✅ Stable | REQUIRED |
 | Dollar sign escaping `$$` | ✅ Stable | REQUIRED |
 | Links `[text](url)`, `{u=url}` | ✅ Stable | REQUIRED |
 | Auto-links `<url>` | ✅ Stable | REQUIRED |
-| Image insert `![](url)`, `!(url)` | ✅ Stable | REQUIRED |
-| Image dimensions `{width=N}`, `{x=N y=M}` | ✅ Stable | REQUIRED |
-| Image references `!(n)`, `![regex]` | ✅ Stable | REQUIRED |
+| Image insert `![](url)`, `![alt](url)` | ✅ Stable | REQUIRED |
+| Image dimensions `{x=N}`, `{x=N y=M}` | ✅ Stable | REQUIRED |
 | Native regex mode | ✅ Stable | RECOMMENDED |
 | Positional insert (`^$`, `^`, `$`) | ✅ Stable | REQUIRED |
 | Delete command `d/pattern/` | ✅ Stable | REQUIRED |
 | Append command `a/pattern/text/` | ✅ Stable | REQUIRED |
 | Insert command `i/pattern/text/` | ✅ Stable | REQUIRED |
 | Transliterate command `y/src/dst/` | ✅ Stable | REQUIRED |
-| Table creation (`\|RxC\|`) | ✅ Stable | REQUIRED |
-| Pipe table syntax | ✅ Stable | REQUIRED |
-| Table deletion (`\|N\|`, `\|*\|`) | ✅ Stable | REQUIRED |
-| Cell references (`[A1]`, `[R,C]`) | ✅ Stable | REQUIRED |
-| Cell wildcards (`[1,*]`, `[*,2]`, `[*,*]`) | ✅ Stable | REQUIRED |
-| Row operations (insert/delete/append) | ✅ Stable | REQUIRED |
-| Column operations (insert/delete/append) | ✅ Stable | REQUIRED |
-| Table merge (`[r1,c1:r2,c2]/merge/`) | ✅ Stable | REQUIRED |
+| Table creation (`{T=RxC}`) | ✅ Stable | REQUIRED |
+| Table deletion (`{T=N}`, `{T=*}`) | ✅ Stable | REQUIRED |
+| Cell references (`{T=1!A1}`, `{T=1!R,C}`) | ✅ Stable | REQUIRED |
+| Cell wildcards (`{T=1!1,*}`, `{T=1!*,2}`, `{T=1!*}`) | ✅ Stable | REQUIRED |
+| Row operations (`{T=1!row=+N}`, `{T=1!row=$+}`) | ✅ Stable | REQUIRED |
+| Column operations (`{T=1!col=+N}`, `{T=1!col=$+}`) | ✅ Stable | REQUIRED |
+| Table merge (`{T=1!r1,c1:r2,c2}/merge/`) | ✅ Stable | REQUIRED |
 | Dry-run mode (`--dry-run`, `-n`) | ✅ Stable | REQUIRED |
 | Batch processing (`-f file.sed`) | ✅ Stable | REQUIRED |
-| Markdown formatting (`**`, `*`, `` ` ``, `~~`, `__`) | ✅ Stable | RECOMMENDED |
+| Markdown formatting (`**`, `*`, `` ` ``, `~~`) | ✅ Stable | RECOMMENDED |
 | Markdown headings (`#` through `######`) | ✅ Stable | RECOMMENDED |
 | Markdown lists (`-`, `1.`, nested) | ✅ Stable | RECOMMENDED |
 | Markdown blocks (rules, quotes, code) | ✅ Stable | RECOMMENDED |
 | Footnotes `[^text]` | ✅ Stable | RECOMMENDED |
-| Range references (`[A1:C3]`) | 🔮 Proposed | OPTIONAL |
+| ⚠️ DEPRECATED: `!(url)` image shorthand | ⚠️ Deprecated | OPTIONAL |
+| ⚠️ DEPRECATED: `!(n)`, `!(-n)`, `!(*)` image refs | ⚠️ Deprecated | OPTIONAL |
+| ⚠️ DEPRECATED: `![regex]` alt-text match | ⚠️ Deprecated | OPTIONAL |
+| ⚠️ DEPRECATED: `__underline__` | ⚠️ Deprecated | OPTIONAL |
+| ⚠️ DEPRECATED: `{super=text}`, `{sub=text}` | ⚠️ Deprecated | OPTIONAL |
+| ⚠️ DEPRECATED: Pipe table syntax (`\|N\|`, `\|RxC\|`) | ⚠️ Deprecated | OPTIONAL |
+| ⚠️ DEPRECATED: Pipe cell refs (`\|N\|[A1]`) | ⚠️ Deprecated | OPTIONAL |
+| ⚠️ DEPRECATED: Pipe row/col ops (`\|N\|[row:+N]`) | ⚠️ Deprecated | OPTIONAL |
+| Range references (`{T=1!A1:C3}`) | ✅ Stable | REQUIRED |
 | Table cell styling | 🔮 Proposed | OPTIONAL |
 | @ mentions | 🔮 Proposed | OPTIONAL |
 
@@ -1500,7 +1611,7 @@ merge-range    = (DIGIT+ / ALPHA+DIGIT+) "," (DIGIT+ / ALPHA+DIGIT+) ":"
 # Replace placeholders with content
 s/{{NAME}}/Acme Corp/
 s/{{DATE}}/2026-02-17/
-s/{{LOGO}}/![](https:\/\/acme.com\/logo.png){width=200}/
+s/{{LOGO}}/![](https:\/\/acme.com\/logo.png){x=200}/
 s/{{SIGNATURE}}/{u=mailto:john@acme.com t=John Doe}/
 ```
 
@@ -1512,7 +1623,17 @@ s/^$/{h=t t=Quarterly Report}/
 a/Quarterly Report/{h=2 t=Executive Summary}/
 a/Executive Summary/The company performed well this quarter./
 a/performed well/{h=2 t=Financial Results}/
-a/Financial Results/| Metric | Q3 | Q4 |\n| Revenue | $$10M | $$12M |\n| Growth | 15% | 20% |/
+a/Financial Results/{T=3x3}/
+s/{T=1!A1}/Metric/
+s/{T=1!B1}/Q3/
+s/{T=1!C1}/Q4/
+s/{T=1!A2}/Revenue/
+s/{T=1!B2}/$$10M/
+s/{T=1!C2}/$$12M/
+s/{T=1!A3}/Growth/
+s/{T=1!B3}/15%/
+s/{T=1!C3}/20%/
+s/{T=1!1,*}/{b}/
 s/$/\n{+}\n> Report generated automatically.\n[^Internal use only.]/
 ```
 
@@ -1543,21 +1664,21 @@ gog docs sed -f cleanup.sed <doc-id>
 
 ```bash
 # Create and populate a pricing table
-s/{{PRICING}}/|4x3|/
-s/|1|[A1]/{b t=Plan}/
-s/|1|[B1]/{b t=Monthly}/
-s/|1|[C1]/{b t=Annual}/
-s/|1|[1,*]/{b}/
-s/|1|[A2]/Basic/
-s/|1|[A3]/Pro/
-s/|1|[A4]/Enterprise/
+s/{{PRICING}}/{T=4x3}/
+s/{T=1!A1}/{b t=Plan}/
+s/{T=1!B1}/{b t=Monthly}/
+s/{T=1!C1}/{b t=Annual}/
+s/{T=1!1,*}/{b}/
+s/{T=1!A2}/Basic/
+s/{T=1!A3}/Pro/
+s/{T=1!A4}/Enterprise/
 
 # Merge header cells
-s/|1|[1,1:1,3]/merge/
+s/{T=1!1,1:1,3}/merge/
 
 # Add a row
-s/|1|[row:$+]//
-s/|1|[A5]/Custom/
+s/{T=1!row=$+}//
+s/{T=1!A5}/Custom/
 ```
 
 ### Smart Chip Integration
@@ -1590,6 +1711,7 @@ Implementations MUST handle errors gracefully:
 | Mismatched `y///` lengths | MUST report error |
 | Circular reference | MUST detect and reject |
 | Invalid `chip://` scheme | SHOULD report warning, MAY skip |
+| Deprecated syntax used | SHOULD emit deprecation warning |
 
 ---
 
@@ -1605,7 +1727,7 @@ Implementations MUST handle errors gracefully:
 
 ## Future Considerations
 
-> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.0.
+> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.1.
 
 ### Document-Level Directives
 
@@ -1634,7 +1756,7 @@ This feature is deferred pending implementation experience.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    SEDMAT 3.0 Quick Reference                     │
+│                    SEDMAT 3.1 Quick Reference                     │
 ├──────────────────────────────────────────────────────────────────┤
 │ COMMANDS                                                          │
 │   s/pattern/replacement/[flags]  Substitute                       │
@@ -1663,7 +1785,8 @@ This feature is deferred pending implementation experience.
 │   {f=Roboto}  Font          {s=14}      Size (pt)                 │
 │   {u=URL}     Link          {u=#name}   Bookmark link             │
 │   {h=1}       Heading 1     {h=t}       Title                     │
-│   {h=s}       Subtitle      {h}         Normal text               │
+│   {h=s}       Subtitle      {h}         Heading 1 (default)       │
+│   {h=0}       Normal text                                         │
 │                                                                   │
 │ IMPLICIT t= RULE:                                                 │
 │   {b} expands to {b t=$0} — matched text is preserved             │
@@ -1677,8 +1800,6 @@ This feature is deferred pending implementation experience.
 │                                                                   │
 │ SUPERSCRIPT/SUBSCRIPT:                                            │
 │   {^}         Whole sup     {,}         Whole sub                 │
-│   {super=2}   Inline sup    {sub=2}     Inline sub                │
-│   {baseline=super}          {baseline=sub}                        │
 │                                                                   │
 │ COMMENTS & BOOKMARKS:                                             │
 │   {"=text}    Comment       {@=name}    Bookmark anchor           │
@@ -1691,10 +1812,29 @@ This feature is deferred pending implementation experience.
 │   {u=chip://dropdown/a|b|c} Dropdown chip                         │
 │   {u=chip://chart/ID/0}     Chart embed                           │
 ├──────────────────────────────────────────────────────────────────┤
+│ TABLES — BRACE SYNTAX {T=}                              ✅ STABLE │
+│   {T=3x4}                   Create 3-row, 4-col table             │
+│   {T=3x4:header}            Create with header                    │
+│   {T=1}, {T=-1}, {T=*}      Table reference / delete              │
+│   {T=1!A1}  {T=1!1,2}       Cell reference                        │
+│   {T=1!1,*} {T=1!*,2}       Row/column wildcard                   │
+│   {T=1!*}                   Entire table                          │
+│   {T=1!row=+2} {T=1!row=$+} Insert/append row                     │
+│   {T=1!col=+2} {T=1!col=$+} Insert/append column                  │
+│   {T=1!A1:C3}/merge/        Merge cell range                      │
+├──────────────────────────────────────────────────────────────────┤
+│ IMAGES                                                  ✅ STABLE │
+│   ![alt](url)               Insert image (standard markdown)      │
+│   ![](url)                  Insert (no alt text)                  │
+│   {x=N} or {y=N}            Set dimensions                        │
+│   {img=1}, {img=-1}         Reference by position                 │
+│   {img=*}                   All images                            │
+│   {img=regex}               Match by alt text                     │
+├──────────────────────────────────────────────────────────────────┤
 │ MARKDOWN SHORTCUTS (convenience layer)                            │
 │   **text**    Bold          *text*      Italic                    │
 │   ~~text~~    Strike        `text`      Monospace                 │
-│   __text__    Underline     ***text***  Bold+Italic               │
+│   ***text***  Bold+Italic                                         │
 │   # text      Heading 1     ## text     Heading 2, etc.           │
 │   - item      Bullet list   1. item     Numbered list             │
 │   ---         Horiz rule    > text      Blockquote                │
@@ -1704,38 +1844,61 @@ This feature is deferred pending implementation experience.
 │   $0 or &     Entire match              $1-$9       Capture groups│
 │   $$          Literal $                 \&          Literal &     │
 ├──────────────────────────────────────────────────────────────────┤
-│ LINKS & IMAGES                                                    │
+│ LINKS                                                             │
 │   [text](url)               Hyperlink                             │
 │   {u=url}                   Brace syntax link                     │
-│   ![alt](url)               Insert image                          │
-│   !(url)                    Insert (shorthand)                    │
-│   {width=N} or {x=N}        Set width                             │
-│   !(1), !(-1), !(*)         Reference by position                 │
 ├──────────────────────────────────────────────────────────────────┤
 │ POSITIONAL INSERT                                                 │
 │   s/^$/text/                Insert into empty document            │
 │   s/^/text/                 Prepend to document                   │
 │   s/$/text/                 Append to document                    │
 ├──────────────────────────────────────────────────────────────────┤
-│ TABLES                                                            │
-│   |3x4|                     Create 3-row, 4-col table             │
-│   | A | B |\n| 1 | 2 |      Pipe table syntax                     │
-│   |1|, |-1|, |*|            Table reference / delete              │
-│   |1|[A1]  |1|[1,2]         Cell reference                        │
-│   |1|[1,*] |1|[*,2]         Row/column wildcard                   │
-│   |1|[row:+2] |1|[row:$+]   Insert/append row                     │
-│   |1|[col:+2] |1|[col:$+]   Insert/append column                  │
-│   |1|[r1,c1:r2,c2]/merge/   Merge cell range                      │
-├──────────────────────────────────────────────────────────────────┤
 │ CLI OPTIONS                                                       │
 │   --dry-run / -n            Preview changes (no modify)           │
 │   -f file.sed               Batch expressions from file           │
+├──────────────────────────────────────────────────────────────────┤
+│ ⚠️ DEPRECATED SYNTAX (backward compat only)                       │
+│   !(url)      → ![](url)         __text__ → {_}                   │
+│   !(1)        → {img=1}          {super=} → {^}                   │
+│   ![regex]    → {img=regex}      {sub=}   → {,}                   │
+│   |1|         → {T=1}            |1|[A1]  → {T=1!A1}              │
+│   |3x4|       → {T=3x4}          |1|[row:+2] → {T=1!row=+2}       │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Changelog
+
+### v3.1 (2026-02-18)
+
+**Major: Deprecations and Brace Syntax Standardization**
+
+- **`{T=}` table syntax promoted to STABLE**: Unified brace addressing for tables is now the canonical syntax; all pipe-based table syntax deprecated
+- **`{img=}` image reference syntax added**: Brace-based image references (`{img=1}`, `{img=-1}`, `{img=*}`, `{img=regex}`) as canonical replacement for deprecated position/alt-text syntax
+- **`{h}` bare now defaults to HEADING_1**: Previously defaulted to NORMAL_TEXT; use `{h=0}` explicitly for normal text
+- **Removed `{baseline=super}` and `{baseline=sub}`**: The `{^}` and `{,}` boolean flags provide whole-replacement super/subscript
+- **Removed `{super=text}` and `{sub=text}` inline wrappers**: Deprecated; use boolean flags or multiple substitutions for partial formatting
+
+**Deprecations** (OPTIONAL for backward compatibility):
+
+- **Pipe table syntax deprecated**: `|1|`, `|2|`, `|-1|`, `|*|` → use `{T=1}`, `{T=2}`, `{T=-1}`, `{T=*}`
+- **Pipe table creation deprecated**: `|3x4|`, `|3x4:header|` → use `{T=3x4}`, `{T=3x4:header}`
+- **Pipe cell references deprecated**: `|1|[A1]`, `|1|[1,2]` → use `{T=1!A1}`, `{T=1!1,2}`
+- **Pipe row/col operations deprecated**: `|1|[row:+2]`, `|1|[col:$+]` → use `{T=1!row=+2}`, `{T=1!col=$+}`
+- **Pipe table literal syntax deprecated**: Use `{T=RxC}` then populate cells
+- **Custom image shorthand deprecated**: `!(url)` → use `![](url)` (standard markdown)
+- **Custom image position refs deprecated**: `!(1)`, `!(-1)`, `!(*)` → use `{img=1}`, `{img=-1}`, `{img=*}`
+- **Custom image alt-text matching deprecated**: `![regex]` → use `{img=regex}`
+- **`__underline__` markdown deprecated**: Not standard CommonMark; use `{_}` brace syntax
+- **`{super=text}`, `{sub=text}` deprecated**: Use `{^}` and `{,}` boolean flags
+
+**Other changes**:
+
+- Updated ABNF grammar with `{T=}` table syntax and `{img=}` image reference syntax
+- Updated conformance levels: Level 7 now covers backward-compatible deprecated features
+- Implementation status table updated to reflect deprecations
+- Quick reference card updated with deprecated syntax migration guide
 
 ### v3.0 (2026-02-18)
 
