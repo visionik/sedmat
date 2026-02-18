@@ -865,6 +865,100 @@ s/|1|[1,1:1,3]/merge/
 s/|1|[2,1:3,2]/merge/
 ```
 
+### Unified Brace Addressing — 🔮 PROPOSED
+
+> **Status**: PROPOSED — The `T=` key provides a unified brace-based addressing syntax for tabular data across Google Docs tables and Google Sheets. This is the future direction for table/sheet operations.
+
+The `T=` key uses `!` as the mode switch: the `!` separator (following Excel/Sheets convention) enters sheet context. An optional `DOC_ID:` prefix enables cross-document references.
+
+#### Syntax
+
+```
+{T=[doc:]sheet!cell}
+{T=[doc:]sheet!range}
+{T=[doc:]sheet!row-or-col-op}
+```
+
+| Component | Meaning | Examples |
+|-----------|---------|----------|
+| `doc:` | Document ID (optional, for cross-doc refs) | `1f1W9Wd...:`  |
+| `sheet` | Sheet tab by name or 0-based index | `Sales`, `0`, `Budget` |
+| `!` | Sheet/cell separator | |
+| `cell` | Cell address (Excel-style) | `A1`, `B3` |
+| `range` | Cell range | `A1:C3`, `A:A`, `2:2` |
+| `*` | Wildcard (entire sheet) | `0!*` |
+| `row=`/`col=` | Row/column operations | `row=$+`, `col=+3` |
+
+#### Cell & Range Access
+
+```bash
+# Cell in first sheet
+s/{T=0!A1}/{t=Revenue b}/
+
+# Cell in named tab
+s/{T=Budget!C5}/{t=$$1,234 b c=green}/
+
+# Range
+s/{T=Sales!A1:C3}/{b}/
+
+# Entire column A
+s/{T=0!A:A}/{c=blue}/
+
+# Entire row 2
+s/{T=0!2:2}/{b z=#eeeeee}/
+
+# Entire sheet (all cells)
+s/{T=0!*}/{0}/
+```
+
+#### Row & Column Operations
+
+```bash
+# Append row to first sheet
+s/{T=0!row=$+}//
+
+# Insert column before column 3
+s/{T=0!col=+3}//
+
+# Delete row 5
+s/{T=Budget!row=5}//
+```
+
+#### Cross-Document References
+
+```bash
+# Reference cell in another doc's sheet
+s/{T=1f1W9Wd...:Sales!A1}/{t=Updated}/
+
+# Copy formatting across docs
+s/{T=DOC_ID:0!A1:A10}/{b c=red}/
+```
+
+#### Merge
+
+```bash
+# Merge cells in a sheet
+s/{T=0!A1:C1}/merge/
+
+# Merge in named tab
+s/{T=Summary!B2:D4}/merge/
+```
+
+#### Combined with Brace Formatting
+
+```bash
+# Set value + bold + color
+s/{T=Sales!B2}/{t=$$42,000 b c=green}/
+
+# Bold an entire header row
+s/{T=0!1:1}/{b z=#333 c=white}/
+
+# Format column as currency
+s/{T=Budget!C:C}/{c=green b}/
+```
+
+> **Note**: Docs table syntax (`|1|[A1]`, `|1|[row:+2]`, etc.) remains supported as a stable shorthand for inline document tables. The `T=` brace syntax is the unified addressing model for both Docs tables and Sheets.
+
 ---
 
 ## Positional Insert ✅ STABLE
