@@ -6,14 +6,17 @@
 
 ## Abstract
 
-SEDMAT (Sed-Expression-Driven Markdown Annotation & Transformation) is a specification for document manipulation using sed-inspired syntax combined with a compact brace-based formatting DSL (`{flags}`). Markdown-style formatting is supported as a convenience layer. SEDMAT provides a portable, human-readable DSL for batch text transformations, formatting operations, and structural modifications targeting rich document formats (Google Docs, Word, etc.).
+SEDMAT (Sed-Expression-Driven Markdown Annotation & Transformation) is a specification for document manipulation using sed-inspired syntax combined with a compact brace-based formatting DSL (`{flags}`). SEDMAT provides a portable, human-readable DSL for batch text transformations, formatting operations, and structural modifications targeting rich document formats (Google Docs, Word, etc.).
+
+**Brace Syntax** is the canonical formatting system. Markdown-style formatting (`**bold**`, `*italic*`) is supported as a convenience layer for familiarity but is not the primary syntax.
 
 ## Introduction
 
 SEDMAT enables:
 
 - **Familiar Syntax**: sed-style `s/pattern/replacement/flags` expressions
-- **Rich Formatting**: Brace syntax (`{b}`, `{c=red}`, `{h=1}`) as canonical format, with Markdown shortcuts (`**bold**`, `*italic*`) as convenience
+- **Rich Formatting**: Brace syntax (`{b}`, `{c=red}`, `{h=1}`) as the canonical format
+- **Markdown Shortcuts**: Optional convenience layer (`**bold**`, `*italic*`) for those familiar with Markdown
 - **Structural Operations**: Headings, lists, tables, horizontal rules, blockquotes, code blocks
 - **Extended Commands**: `d/` (delete), `a/` (append), `i/` (insert), `y/` (transliterate)
 - **Regex Power**: Full Extended Regular Expression (ERE) support with back-references
@@ -37,17 +40,20 @@ s/pattern/replacement/
 - Replaces with `replacement`
 - Affects first match only
 
-### With Formatting
+### With Brace Formatting
 
 ```bash
-# Make "warning" bold
-s/warning/**warning**/
+# Make "warning" bold (canonical brace syntax)
+s/warning/{b}/
+
+# Bold + red
+s/error/{b c=red}/
+
+# Bold and preserve matched text explicitly
+s/warning/{b t=$0}/
 
 # Wrap in link
-s/Google/[Google](https://google.com)/
-
-# Insert image at placeholder
-s/{{LOGO}}/![](https://example.com/logo.png)/
+s/Google/{u=https://google.com}/
 
 # Delete paragraphs containing "DRAFT"
 d/DRAFT/
@@ -103,6 +109,8 @@ flowchart TB
 
 SEDMAT processors SHOULD detect plain-text replacements and use native regex APIs for optimal performance.
 
+---
+
 ## Commands
 
 ### Substitute: `s/pattern/replacement/[flags]` ✅ STABLE
@@ -153,9 +161,11 @@ y/abc/xyz/              # a→x, b→y, c→z
 y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/  # Lowercase
 ```
 
-## Syntax Reference
+---
 
-### Flags
+## Flags and Delimiters
+
+### Command Flags ✅ STABLE
 
 Flag | Meaning | Status
 --- | --- | ---
@@ -175,7 +185,7 @@ s/^line/LINE/gm # Multiline + global
 
 **Conformance**: Implementations MUST support `g`. Implementations MUST support `n` (nth occurrence) and `m` (multiline) flags.
 
-### Delimiters
+### Delimiters ✅ STABLE
 
 The delimiter `/` MAY be replaced with any consistent character not appearing in the pattern or replacement:
 
@@ -190,273 +200,477 @@ s|path/to/file|replacement|
 
 Implementations MUST support at minimum `/`, `#`, and `|` as delimiters.
 
-## Text Formatting (Markdown Shortcuts — RECOMMENDED)
+---
 
-> **Note**: Markdown formatting is a RECOMMENDED convenience layer. The canonical formatting system is [Brace Syntax](#brace-syntax--compact-formatting-dsl--stable). Implementations MUST support brace syntax; Markdown shortcuts are RECOMMENDED.
+## Brace Syntax — Canonical Formatting DSL ✅ STABLE
 
-### Inline Styles
+> **Status**: ✅ STABLE — Brace Syntax is the canonical formatting system in SEDMAT. All brace syntax features are REQUIRED for conformant implementations.
 
-Syntax | Effect | Status
---- | --- | ---
-`**text**` | Bold | RECOMMENDED
-`*text*` | Italic | RECOMMENDED
-`_text_` | Italic | RECOMMENDED
-`***text***` | Bold + Italic | RECOMMENDED
-`~~text~~` | Strikethrough | RECOMMENDED
-`` `text` `` | Monospace | RECOMMENDED
-`__text__` | Underline | OPTIONAL
-`{super=text}` | Superscript | REQUIRED
-`{sub=text}` | Subscript | REQUIRED
-`^{text}` | Superscript (DEPRECATED) | OPTIONAL
-`~{text}` | Subscript (DEPRECATED) | OPTIONAL
+Brace Syntax is the **primary formatting system** in SEDMAT replacement strings. It uses `{key value}` pairs inside curly braces to specify formatting, structural, and semantic attributes.
+
+### Overview
+
+Where Markdown uses wrapper characters (`**bold**`, `*italic*`), Brace Syntax uses flag-based declarations:
+
+```bash
+# Brace Syntax (canonical)
+s/error/{b}/g
+
+# Brace Syntax with color (no Markdown equivalent)
+s/error/{b c=red}/g
+
+# Markdown style (convenience alternative)
+s/error/**error**/g
+```
+
+Brace Syntax is particularly useful for expressing attributes that have no Markdown equivalent (color, font, size, background, headings, breaks, comments, bookmarks, smart chips).
+
+### Design Rules
+
+1. **`t=` defaults to `$0`** — The implicit text flag preserves the matched text. Writing `{b}` is equivalent to `{b t=$0}`. The matched text is automatically preserved unless you explicitly override it with `t=something`.
+
+2. **Boolean flags need no `=y`** — Simply `{b i _}` for bold + italic + underline.
+
+3. **Bare value flags reset to defaults** — `{f s c z}` resets font to Arial, size to 11pt, color to black, background to clear.
+
+4. **`{0}` resets ALL formatting** — Acts like CSS `all: unset`. MAY be combined: `{0 b}` resets everything then applies bold.
+
+### The Implicit `t=` Default
+
+This is the most important design rule. When you write a brace expression, the matched text (`$0`) is implicitly preserved:
+
+```bash
+# These are equivalent:
+s/warning/{b}/g
+s/warning/{b t=$0}/g
+
+# The replacement is "warning" with bold applied
+```
+
+If you want to replace the text, use `t=`:
+
+```bash
+# Replace "error" with "ERROR" and make it bold
+s/error/{b t=ERROR}/g
+
+# Replace with back-reference
+s/(\w+)/{b t=[$1]}/g   # "hello" → "[hello]" in bold
+```
+
+If you omit brace syntax entirely, you're doing a plain text replacement:
+
+```bash
+# Plain replacement (no formatting)
+s/old/new/g
+```
+
+### Boolean Flags ✅ STABLE
+
+Boolean flags are activated by presence alone. No `=y` is needed.
+
+| Short | Long | Effect |
+|-------|------|--------|
+| `b` | `bold` | Bold |
+| `i` | `italic` | Italic |
+| `_` | `underline` | Underline |
+| `-` | `strike` | Strikethrough |
+| `#` | `code` | Monospace/code |
+| `^` | `sup` | Superscript (entire replacement) |
+| `,` | `sub` | Subscript (entire replacement) |
+| `w` | `smallcaps` | Small caps |
 
 **Examples:**
 
 ```bash
-# Bold a keyword
-s/CRITICAL/**CRITICAL**/g
+s/important/{b}/g              # Bold
+s/emphasis/{i}/g               # Italic
+s/code/{#}/g                   # Monospace
+s/deleted/{-}/g                # Strikethrough
+s/term/{_ i}/g                 # Underline + italic
+```
 
-# Italicize quoted text
-s/"([^"]+)"/*$1*/g
+### Negation ✅ STABLE
 
-# Strikethrough deprecated terms
-s/deprecated/~~deprecated~~/g
+Use `!` prefix or `=n` suffix to explicitly turn off a flag:
 
-# Code formatting for inline code
-s/console\.log/`console.log`/g
+```bash
+s/already bold/{!b}/g     # Remove bold
+s/already bold/{b=n}/g    # Equivalent
+s/styled/{!b !i !_}/g     # Remove multiple styles
+```
+
+### Combining Boolean Flags ✅ STABLE
+
+Multiple boolean flags MAY appear in a single brace group:
+
+```bash
+s/critical/{b i _}/g      # Bold + italic + underline
+s/code/{# -}/g            # Monospace + strikethrough
+s/warning/{b i c=red}/g   # Bold + italic + red color
+```
+
+### Value Flags ✅ STABLE
+
+Value flags use `key=value` syntax. When a value flag appears **bare** (without `=value`), it resets to its default.
+
+| Short | Long | Default (bare) | Effect |
+|-------|------|----------------|--------|
+| `t` | `text` | `$0` (matched text) | Replacement text |
+| `c` | `color` | black | Text color |
+| `z` | `bg` | clear | Background/highlight color |
+| `f` | `font` | Arial | Font family |
+| `s` | `size` | 11pt | Font size in points |
+| `u` | `url` | (strip link) | Link/URL/URI |
+| `h` | `heading` | NORMAL_TEXT | Heading level |
+| `l` | `leading` | 1.15 | Line height |
+| `a` | `align` | left | Text alignment |
+| `o` | `opacity` | 100 | Opacity (percentage) |
+| `n` | `indent` | 0 | Indent level |
+| `k` | `kerning` | 0 | Letter spacing |
+| `x` | `width` | — | Width in pixels |
+| `y` | `height` | — | Height in pixels |
+| `p` | `spacing` | — | Paragraph spacing above/below |
+| `e` | `effect` | — | Shadow/glow/blur |
+
+**Examples:**
+
+```bash
+# Colors
+s/error/{c=red}/g
+s/warning/{c=#FFA500}/g        # Orange (hex)
+s/highlight/{z=yellow}/g       # Yellow background
+
+# Fonts and sizes
+s/heading/{f=Georgia s=18}/g
+s/caption/{s=9 i}/g
+
+# Combined
+s/CRITICAL/{b c=red z=yellow s=14}/g
+```
+
+### Reset: `{0}` ✅ STABLE
+
+The `{0}` flag resets ALL formatting to defaults, like CSS `all: unset`:
+
+```bash
+s/messy text/{0}/g            # Strip all formatting
+s/messy text/{0 b}/g          # Reset then apply bold only
+s/weird font/{0 f=Arial}/g    # Reset then set font
+```
+
+You can also reset individual attributes by using bare value flags:
+
+```bash
+s/text/{f s c z}/g            # Reset font, size, color, background
+```
+
+### Heading Shorthands ✅ STABLE
+
+The `h` flag controls heading level using compact shorthands:
+
+| Syntax | Maps to |
+|--------|---------|
+| `{h=t}` | TITLE |
+| `{h=s}` | SUBTITLE |
+| `{h=1}` | HEADING_1 |
+| `{h=2}` | HEADING_2 |
+| `{h=3}` | HEADING_3 |
+| `{h=4}` | HEADING_4 |
+| `{h=5}` | HEADING_5 |
+| `{h=6}` | HEADING_6 |
+| `{h}` (bare) | NORMAL_TEXT (reset heading) |
+
+**Examples:**
+
+```bash
+s/My Document/{h=t}/g         # Set as Title
+s/Overview/{h=s}/g            # Set as Subtitle
+s/Chapter 1/{h=1 b}/g         # Heading 1 + bold
+s/Section/{h=2}/g             # Heading 2
+s/normal paragraph/{h}/g      # Reset to normal text
+```
+
+### Superscript and Subscript ✅ STABLE
+
+SEDMAT provides three ways to handle super/subscript:
+
+#### 1. Boolean Flags: `{^}` and `{,}`
+
+Apply to the entire replacement:
+
+```bash
+s/TM/{^}/g                    # "TM" as superscript
+s/2/{,}/g                     # "2" as subscript
+```
+
+#### 2. Inline Wrappers: `{super=text}` and `{sub=text}`
+
+Apply to a portion of the replacement text:
+
+```bash
+s/E=mc2/E=mc{super=2}/g       # Only the "2" is superscript
+s/H2O/H{sub=2}O/g             # Only the "2" is subscript
+s/x squared/x{super=2}/g
+s/CO2/CO{sub=2}/g
+```
+
+#### 3. Whole-Replacement: `{baseline=super}` and `{baseline=sub}`
+
+Force the entire replacement to a specific baseline:
+
+```bash
+s/TM/{baseline=super}TM/g     # Explicit whole-replacement superscript
+s/note/{baseline=sub}note/g   # Entire "note" as subscript
+```
+
+**Processing Order**: `{super=text}` and `{sub=text}` are processed first to extract inline portions, then boolean flags `{^}` and `{,}` apply to remaining text.
+
+### Breaks: `{+}` ✅ STABLE
+
+The `+` key inserts structural breaks. When used alone, it inserts a horizontal rule. With a value, it specifies the break type:
+
+| Syntax | Effect |
+|--------|--------|
+| `{+}` | Horizontal rule (default) |
+| `{+=p}` | Page break |
+| `{+=c}` | Column break |
+| `{+=s}` | Section break |
+
+**Examples:**
+
+```bash
+s/---/{+}/g                   # Horizontal rule
+s/END/{+=p}/g                 # Page break
+s/COLUMN_BREAK/{+=c}/g        # Column break
+s/SECTION_END/{+=s}/g         # Section break
+```
+
+### Comments: `{"=text}` ✅ STABLE
+
+The `"` key attaches a comment (annotation) to the matched text:
+
+```bash
+s/TODO/{"=needs review}/g                 # Just a comment
+s/TODO/{"=needs review b c=red}/g         # Comment + bold + red
+s/FIXME/{"=assigned to viz b}/g           # Comment with formatting
+```
+
+### Bookmarks: `{@=name}` and `{u=#name}` ✅ STABLE
+
+Create bookmark anchors and link to them:
+
+| Syntax | Effect |
+|--------|--------|
+| `{@=name}` | Creates a bookmark anchor on the matched text |
+| `{u=#name}` | Links to a bookmark by name |
+
+**Examples:**
+
+```bash
+# Create a bookmark anchor
+s/Chapter 1/{@=ch1 h=1}/g            # Bookmark + heading
+
+# Link to the bookmark
+s/see Chapter 1/{u=#ch1 c=blue _}/g  # Link to bookmark + styling
+
+# Create anchor and style
+s/Definition/{@=def1 b}/g
+
+# Reference it elsewhere
+s/as defined above/{u=#def1}/g
+```
+
+### URI Schemes for `{u=}` ✅ STABLE
+
+The `u` flag accepts any valid URI. SEDMAT defines standard schemes and custom `chip://` schemes for Google Docs smart chips.
+
+#### Standard Schemes
+
+| Scheme | Example |
+|--------|---------|
+| `https://` | `{u=https://deft.md}` |
+| `http://` | `{u=http://example.com}` |
+| `mailto:` | `{u=mailto:viz@example.com}` |
+| `tel:` | `{u=tel:+14076163470}` |
+| `geo:` | `{u=geo:28.69,-81.31}` |
+| `sms:` | `{u=sms:+14076163470}` |
+| `webcal:` | `{u=webcal://feed.ics}` |
+| `file:` | `{u=file:///path}` |
+
+**Examples:**
+
+```bash
+s/Google/{u=https://google.com}/g
+s/contact/{u=mailto:hello@example.com}/g
+s/call us/{u=tel:+14075551234}/g
+s/location/{u=geo:28.5383,-81.3792}/g
+```
+
+#### Custom `chip://` Schemes ✅ STABLE
+
+For Google Docs smart chip insertion:
+
+| Scheme | Example | Effect |
+|--------|---------|--------|
+| `chip://person/` | `{u=chip://person/viz@example.com}` | Person smart chip |
+| `chip://date/` | `{u=chip://date/2026-03-15}` | Date smart chip |
+| `chip://file/` | `{u=chip://file/DOC_ID}` | File link chip |
+| `chip://place/` | `{u=chip://place/Orlando, FL}` | Place chip |
+| `chip://dropdown/` | `{u=chip://dropdown/Draft\|Review\|Done}` | Dropdown chip |
+| `chip://chart/` | `{u=chip://chart/SHEET_ID/0}` | Chart embed |
+| `chip://bookmark/` | `{u=chip://bookmark/section-1}` | Internal doc link |
+
+**Examples:**
+
+```bash
+s/viz/{u=chip://person/jtaylor@zendicate.com}/g
+s/deadline/{u=chip://date/2026-03-15}/g
+s/project doc/{u=chip://file/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms}/g
+s/status/{u=chip://dropdown/Draft|Review|Done}/g
+```
+
+### Charts ✅ STABLE
+
+Two approaches for embedding charts from Google Sheets:
+
+#### 1. Direct chip:// Reference
+
+```bash
+s/CHART/{u=chip://chart/SHEET_ID/0 x=600 y=400}/g
+```
+
+Pulls chart at index `0` from the linked Sheet and embeds it at 600×400 pixels.
+
+#### 2. Unix Pipe Composition
+
+```bash
+gog sheets chart SHEET_ID 0 --png | gog docs sed DOC_ID 's/PLACEHOLDER/!(-)/g'
+```
+
+Export chart as image, then insert via pipe.
+
+### Brace Syntax Examples
+
+```bash
+# Simple styling
+s/error/{b c=red}/g
+s/TODO/{b c=red z=yellow}/g
+s/note/{i c=gray s=10}/g
+
+# Text replacement with formatting
+s/old text/{b t=new text}/g
+s/(\w+)/{i t=[$1]}/g
+
+# Reset formatting
+s/messy text/{0}/g
+s/messy text/{0 b}/g          # Reset then bold
+
+# Links and chips
+s/viz/{u=chip://person/jtaylor@zendicate.com}/g
+s/deadline/{u=chip://date/2026-03-15}/g
+s/call me/{u=tel:+14075551234}/g
+s/website/{u=https://example.com c=blue _}/g
+
+# Headings
+s/My Doc/{h=t}/g
+s/Overview/{h=s}/g
+s/Chapter 1/{h=1 b}/g
 
 # Superscript and subscript
+s/TM/{^}/g
+s/E=mc2/E=mc{super=2}/g
 s/H2O/H{sub=2}O/g
-s/x2/x{super=2}/g
-s/E=mc2/E=mc{super=2}/
 
-# Deprecated syntax (still supported)
-s/H2O/H{sub=2}O/g           # ~{} is deprecated, prefer {sub=}
-s/E=mc2/E=mc{super=2}/        # ^{} is deprecated, prefer {super=}
+# Breaks
+s/END/{+=p}/g
+s/---/{+}/g
+s/SECTION/{+=s}/g
+
+# Comments and bookmarks
+s/TODO/{@=todo1 "=needs review b c=red}/g
+s/see above/{u=#todo1 c=blue _}/g
+
+# Combined
+s/WARNING/{b i c=red s=14 z=yellow}/g
+s/https\S+/{u=$0 c=blue _}/g
 ```
 
-### Combining Formats
+---
 
-Formats MAY be nested according to Markdown precedence:
+## Back-References ✅ STABLE
 
-```bash
-# Bold AND italic
-s/warning/***warning***/
-
-# Bold and underline
-s/critical/**__critical__**/
-
-# All three
-s/urgent/***__urgent__***/
-```
-
-**Processing Order:**
-
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
-graph LR
-    TEXT[text] --> U["__underline__"]
-    U --> B["**bold**"]
-    B --> I["*italic*"]
-    I --> FINAL["***__text__***"]
-    
-    style TEXT fill:#2a2a2a,color:#ffffff,stroke:#555555
-    style FINAL fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
-```
-
-Implementations MUST process nesting from innermost to outermost.
-
-### Heading Styles ✅ STABLE
-
-Markdown heading syntax in replacements creates native document headings:
-
-Syntax | Effect | Status
---- | --- | ---
-`# text` | Heading 1 (Title) | ✅ STABLE
-`## text` | Heading 2 (Subtitle) | ✅ STABLE
-`### text` | Heading 3 | ✅ STABLE
-`#### text` | Heading 4 | ✅ STABLE
-`##### text` | Heading 5 | ✅ STABLE
-`###### text` | Heading 6 | ✅ STABLE
-
-```bash
-# Convert placeholder to title
-s/TITLE/# My Document/
-
-# Make matched text a heading
-s/Introduction/## Introduction/
-
-# With formatting
-s/WARNING/### **WARNING**/
-```
-
-### Paragraph Styles ✅ STABLE
-
-Markdown list syntax in replacements creates native document lists:
-
-Syntax | Effect | Status
---- | --- | ---
-`- item` | Bullet list item | ✅ STABLE
-`1. item` | Numbered list item | ✅ STABLE
-`  - nested` | Nested bullet (L1, 2 spaces) | ✅ STABLE
-`    - nested` | Nested bullet (L2, 4 spaces) | ✅ STABLE
-`  1. nested` | Nested numbered (L1, 2 spaces) | ✅ STABLE
-`    1. nested` | Nested numbered (L2, 4 spaces) | ✅ STABLE
-
-```bash
-# Create a bullet list
-s/ITEMS/- First item\n- Second item\n- Third item/
-
-# Numbered list
-s/STEPS/1. Step one\n2. Step two\n3. Step three/
-
-# Nested lists
-s/OUTLINE/- Top level\n  - Nested L1\n    - Nested L2/
-```
-
-### Block Elements ✅ STABLE
-
-#### Horizontal Rules
-
-Three or more of `-`, `*`, or `_` on a line create a horizontal rule (rendered as a grey bottom border):
-
-```bash
-s/DIVIDER/---/
-s/BREAK/***/
-s/SEPARATOR/___/
-```
-
-#### Blockquotes
-
-Lines prefixed with `>` create blockquotes (left-indented with grey left border):
-
-```bash
-s/QUOTE/> This is a blockquote/
-s/EPIGRAPH/> To be or not to be\n> That is the question/
-```
-
-#### Code Blocks
-
-Triple backtick fences create code blocks (Courier New font, grey background). Language hints after the opening fence are stripped:
-
-```bash
-s/CODE/```\nfunction hello() {\n  console.log("hi");\n}\n```/
-s/SNIPPET/```python\nprint("hello")\n```/
-```
-
-### Inline Spans `{key:value:text}` ✅ STABLE
-
-The general inline span pattern applies a style attribute to a portion of the replacement text:
-
-```
-{key:value:text}
-```
-
-This is the unified mechanism for inline styling. The `text` portion receives the style specified by `key:value`.
-
-Syntax | Effect | Status
---- | --- | ---
-`{super=text}` | Superscript | ✅ STABLE
-`{sub=text}` | Subscript | ✅ STABLE
-`{color=#RRGGBB:text}` | Colored text | 🔮 PROPOSED
-`{font=name:text}` | Font family | 🔮 PROPOSED
-`{size=N:text}` | Font size | 🔮 PROPOSED
-`{bg=#RRGGBB:text}` | Background highlight | 🔮 PROPOSED
-
-When used as a **whole-replacement attribute** (no `:text` suffix), the style applies to the entire replacement:
-
-Syntax | Effect | Status
---- | --- | ---
-`{baseline=super}` | Entire replacement as superscript | ✅ STABLE
-`{baseline=sub}` | Entire replacement as subscript | ✅ STABLE
-
-**Examples:**
-
-```bash
-# Inline superscript/subscript
-s/E=mc2/E=mc{super=2}/
-s/H2O/H{sub=2}O/
-s/x squared/x{super=2}/
-
-# Whole-replacement superscript
-s/TM/{baseline=super}TM/
-
-# Proposed: inline color
-s/error/{color=#FF0000:error}/
-
-# Proposed: inline font
-s/code/{font=Courier:code}/
-```
-
-> **DEPRECATED**: The older `^{text}` (superscript) and `~{text}` (subscript) syntax is still supported for backward compatibility but `{super=text}` and `{sub=text}` are preferred.
-
-### Footnotes ✅ STABLE
-
-The `[^text]` syntax creates native footnotes in the target document:
-
-```bash
-s/citation/[^See Smith et al., 2024]/
-s/note/[^This is a footnote with detailed explanation]/
-```
-
-### Back-References
-
-SEDMAT MUST support capture groups using `(...)` with references via `$1`-`$9` or `\1`-`\9`:
+SEDMAT supports capture groups using `(...)` with references via `$1`-`$9` or `\1`-`\9`:
 
 ```bash
 # Capture and format
-s/(important)/**$1**/g
+s/(important)/{b t=$1}/g
 
 # Bold all-caps words (2+ chars)
-s/([A-Z]{2,})/**$1**/g
+s/([A-Z]{2,})/{b t=$1}/g
 
 # Wrap names in links
-s/(@\w+)/[$1](https://twitter.com/$1)/g
+s/(@\w+)/{u=https://twitter.com/$1 t=$1}/g
 ```
 
-Reference | Alternative | Meaning
---- | --- | ---
-`$0` | `&` | Entire match
-`$1` | `\1` | First capture group
-`$2` | `\2` | Second capture group
-`$n` | `\n` | Nth capture group (1-9)
+### Reference Syntax
 
-**Whole-match backreference**: `&` represents the entire matched text (like sed). Use `\&` for a literal ampersand.
+| Reference | Alternative | Meaning |
+|-----------|-------------|---------|
+| `$0` | `&` | Entire match |
+| `$1` | `\1` | First capture group |
+| `$2` | `\2` | Second capture group |
+| `$n` | `\n` | Nth capture group (1-9) |
+
+### Whole-Match: `&`
+
+The `&` represents the entire matched text (like sed). Use `\&` for a literal ampersand.
 
 ```bash
-# Wrap every match in bold
-s/important/**&**/g       # & = the matched text
+# Wrap every match in brace formatting
+s/important/{b}/g             # Implicit: {b t=$0}
+
+# Using & explicitly in plain replacement
+s/important/(**&**)/g         # Markdown-style with parens
 
 # Literal ampersand
-s/rock/rock \& roll/      # \& = literal &
+s/rock/rock \& roll/          # \& = literal &
 ```
 
-**Conformance**: Implementations MUST support `$1`-`$9` and `&` notation. Support for `\1`-`\9` is RECOMMENDED for sed compatibility.
+### Dollar Sign Escaping
 
-### Dollar Sign Escaping ✅ STABLE
-
-Use `$$` for a literal dollar sign in replacements. This prevents strings like `$49.99` from being parsed as backreferences.
+Use `$$` for a literal dollar sign in replacements:
 
 ```bash
-s/PRICE/$$49.99/          # Outputs: $49.99
-s/COST/$$100/g            # Outputs: $100
+s/PRICE/$$49.99/g             # Outputs: $49.99
+s/COST/$$100/g                # Outputs: $100
 ```
 
-## Links
+**Conformance**: Implementations MUST support `$1`-`$9`, `$0`, `&`, and `$$` notation. Support for `\1`-`\9` is RECOMMENDED for sed compatibility.
+
+---
+
+## Links ✅ STABLE
 
 ### Link Syntax
 
-Syntax | Effect | Status
---- | --- | ---
-`[text](url)` | Hyperlink with text | REQUIRED
-`<url>` | Auto-link (bare URL) | REQUIRED
-`[text](url "title")` | Link with title attribute | RECOMMENDED
+| Syntax | Effect | Status |
+|--------|--------|--------|
+| `[text](url)` | Hyperlink with text | REQUIRED |
+| `<url>` | Auto-link (bare URL) | REQUIRED |
+| `[text](url "title")` | Link with title attribute | RECOMMENDED |
+| `{u=url}` | Brace syntax link | REQUIRED |
 
 **Examples:**
 
 ```bash
-# Add hyperlink to text
+# Markdown-style link
 s/Google/[Google](https:\/\/google.com)/
+
+# Brace syntax link (canonical)
+s/Google/{u=https://google.com}/
+
+# Link with styling
+s/Google/{u=https://google.com c=blue _}/
 
 # Link email addresses
 s/(\S+@\S+)/[$1](mailto:$1)/g
@@ -465,19 +679,22 @@ s/(\S+@\S+)/[$1](mailto:$1)/g
 s/(https:\/\/\S+)/<$1>/g
 ```
 
-## Images
+---
+
+## Images ✅ STABLE
 
 ### Image Insertion
 
-Syntax | Effect | Status
---- | --- | ---
-`![](url)` | Image, no alt text | REQUIRED
-`!(url)` | Image, shorthand | REQUIRED
-`![alt](url)` | Image with alt text | REQUIRED
-`![alt](url "caption")` | Image with caption | RECOMMENDED
-`![](url){width=N}` | Width in pixels | REQUIRED
-`![](url){height=N}` | Height in pixels | REQUIRED
-`![](url){w=N h=M}` | Both dimensions | REQUIRED
+| Syntax | Effect | Status |
+|--------|--------|--------|
+| `![](url)` | Image, no alt text | REQUIRED |
+| `!(url)` | Image, shorthand | REQUIRED |
+| `![alt](url)` | Image with alt text | REQUIRED |
+| `![alt](url "caption")` | Image with caption | RECOMMENDED |
+| `![](url){width=N}` | Width in pixels | REQUIRED |
+| `![](url){height=N}` | Height in pixels | REQUIRED |
+| `![](url){w=N h=M}` | Both dimensions | REQUIRED |
+| `![](url){x=N y=M}` | Brace syntax dimensions | REQUIRED |
 
 **Examples:**
 
@@ -490,20 +707,23 @@ s/{{LOGO}}/![Company Logo](https:\/\/example.com\/logo.png)/
 
 # With dimensions
 s/{{HERO}}/![](https:\/\/example.com\/hero.jpg){width=600}/
+s/{{BANNER}}/!(https:\/\/example.com\/banner.png){x=800 y=200}/
 ```
 
 ### Image References
 
 Existing images MAY be referenced by position or alt text:
 
-Pattern | Meaning | Status
---- | --- | ---
-`!(1)` | First image | REQUIRED
-`!(2)` | Second image | REQUIRED
-`!(-1)` | Last image | REQUIRED
-`!(-2)` | Second to last | REQUIRED
-`!(*)` | All images | REQUIRED
-`![regex]` | Images matching alt text | REQUIRED
+| Pattern | Meaning | Status |
+|---------|---------|--------|
+| `!(1)` | First image | REQUIRED |
+| `!(2)` | Second image | REQUIRED |
+| `!(-1)` | Last image | REQUIRED |
+| `!(-2)` | Second to last | REQUIRED |
+| `!(*)` | All images | REQUIRED |
+| `![regex]` | Images matching alt text | REQUIRED |
+
+**Examples:**
 
 ```bash
 # Replace first image
@@ -522,60 +742,25 @@ s/![old-logo]/![new-logo](https:\/\/new.png)/
 dimensions     = "{" dimension-list "}"
 dimension-list = dimension ( " " dimension )*
 dimension      = width | height
-width          = ("width" | "w") "=" number
-height         = ("height" | "h") "=" number
+width          = ("width" | "w" | "x") "=" number
+height         = ("height" | "h" | "y") "=" number
 number         = DIGIT+
 ```
 
-## Positional Insert
-
-**Status**: ✅ STABLE
-
-Special patterns for inserting content at document positions without matching existing text:
-
-Pattern | Meaning | Status
---- | --- | ---
-`^$` | Empty document only | REQUIRED
-`^` | Beginning of document (prepend) | REQUIRED
-`$` | End of document (append) | REQUIRED
-
-### Behavior
-
-- `^$` — Implementations MUST check that the document body is empty (no non-whitespace content). If the document is not empty, the expression MUST be a no-op.
-- `^` — Implementations MUST insert the replacement at the beginning of the document body (index 1).
-- `$` — Implementations MUST insert the replacement at the end of the document body.
-
-### Examples
-
-```bash
-# Insert text into an empty document
-s/^$/Hello world/
-
-# Prepend title to any document
-s/^/# Document Title\n/
-
-# Append footer
-s/$/\nGenerated on 2026-02-17/
-```
-
-Positional insert MUST support all replacement features (formatting, images, tables, headings, lists, etc.).
-
 ---
 
-## Tables
+## Tables ✅ STABLE
 
-**Status**: ✅ STABLE
+### Table References
 
-### Table References ✅
+| Pattern | Meaning | Status |
+|---------|---------|--------|
+| &#124;1&#124; | First table | REQUIRED |
+| &#124;2&#124; | Second table | REQUIRED |
+| &#124;-1&#124; | Last table | REQUIRED |
+| &#124;*&#124; | All tables | REQUIRED |
 
-Pattern | Meaning | Status
---- | --- | ---
-&#124;1&#124; | First table | REQUIRED
-&#124;2&#124; | Second table | REQUIRED
-&#124;-1&#124; | Last table | REQUIRED
-&#124;*&#124; | All tables | REQUIRED
-
-### Table Creation ✅
+### Table Creation
 
 ```bash
 # Create 3×4 table (3 rows, 4 columns)
@@ -590,7 +775,7 @@ s/^$/|3x4|/
 
 **Limits**: Implementations SHOULD support 1–100 rows and 1–26 columns.
 
-### Pipe Table Syntax ✅ STABLE
+### Pipe Table Syntax
 
 Markdown pipe table syntax is parsed into native tables:
 
@@ -600,7 +785,7 @@ s/PLACEHOLDER/| Name | Age | City |\n| Alice | 30 | NYC |\n| Bob | 25 | LA |/
 
 The `|` delimited rows are parsed and converted to a native table. Header detection follows standard Markdown rules (separator row with `---`).
 
-### Table Deletion ✅
+### Table Deletion
 
 ```bash
 # Delete first table
@@ -610,16 +795,16 @@ s/|1|//
 s/|*|//
 ```
 
-### Cell References ✅
+### Cell References
 
-Pattern | Meaning | Status
---- | --- | ---
-&#124;1&#124;[A1] | Cell A1 (Excel-style) | ✅ STABLE
-&#124;1&#124;[1,1] | Row 1, Col 1 (1-indexed) | ✅ STABLE
-&#124;1&#124;[1,*] | Entire row 1 (wildcard) | ✅ STABLE
-&#124;1&#124;[*,2] | Entire column 2 (wildcard) | ✅ STABLE
-&#124;1&#124;[*,*] | All cells | ✅ STABLE
-&#124;1&#124;[A1:C3] | Range A1 to C3 | 🔮 PROPOSED
+| Pattern | Meaning | Status |
+|---------|---------|--------|
+| &#124;1&#124;[A1] | Cell A1 (Excel-style) | ✅ STABLE |
+| &#124;1&#124;[1,1] | Row 1, Col 1 (1-indexed) | ✅ STABLE |
+| &#124;1&#124;[1,*] | Entire row 1 (wildcard) | ✅ STABLE |
+| &#124;1&#124;[*,2] | Entire column 2 (wildcard) | ✅ STABLE |
+| &#124;1&#124;[*,*] | All cells | ✅ STABLE |
+| &#124;1&#124;[A1:C3] | Range A1 to C3 | 🔮 PROPOSED |
 
 **Examples:**
 
@@ -629,7 +814,7 @@ s/|1|[A1]/Name/
 s/|1|[B1]/Value/
 
 # Bold entire header row
-s/|1|[1,*]/**&**/
+s/|1|[1,*]/{b}/
 
 # Find/replace within specific cell
 s/|1|[A1]:old/new/
@@ -638,25 +823,25 @@ s/|1|[A1]:old/new/
 s/|1|[*,*]:TODO/DONE/g
 ```
 
-### Row Operations ✅
+### Row Operations
 
-Pattern | Meaning | Status
---- | --- | ---
-&#124;1&#124;[row:2] | Delete row 2 | ✅ STABLE
-&#124;1&#124;[row:-1] | Delete last row | ✅ STABLE
-&#124;1&#124;[row:+2] | Insert row before row 2 | ✅ STABLE
-&#124;1&#124;[row:$+] | Append row at end | ✅ STABLE
+| Pattern | Meaning | Status |
+|---------|---------|--------|
+| &#124;1&#124;[row:2] | Delete row 2 | ✅ STABLE |
+| &#124;1&#124;[row:-1] | Delete last row | ✅ STABLE |
+| &#124;1&#124;[row:+2] | Insert row before row 2 | ✅ STABLE |
+| &#124;1&#124;[row:$+] | Append row at end | ✅ STABLE |
 
-### Column Operations ✅
+### Column Operations
 
-Pattern | Meaning | Status
---- | --- | ---
-&#124;1&#124;[col:2] | Delete column 2 | ✅ STABLE
-&#124;1&#124;[col:-1] | Delete last column | ✅ STABLE
-&#124;1&#124;[col:+2] | Insert column before column 2 | ✅ STABLE
-&#124;1&#124;[col:$+] | Append column at end | ✅ STABLE
+| Pattern | Meaning | Status |
+|---------|---------|--------|
+| &#124;1&#124;[col:2] | Delete column 2 | ✅ STABLE |
+| &#124;1&#124;[col:-1] | Delete last column | ✅ STABLE |
+| &#124;1&#124;[col:+2] | Insert column before column 2 | ✅ STABLE |
+| &#124;1&#124;[col:$+] | Append column at end | ✅ STABLE |
 
-### Table Merge ✅ STABLE
+### Table Merge
 
 Merge a range of cells in a table:
 
@@ -674,31 +859,47 @@ s/|1|[1,1:1,3]/merge/
 s/|1|[2,1:3,2]/merge/
 ```
 
-### Cell Styling — 🔮 PROPOSED
+---
+
+## Positional Insert ✅ STABLE
+
+Special patterns for inserting content at document positions without matching existing text:
+
+| Pattern | Meaning | Status |
+|---------|---------|--------|
+| `^$` | Empty document only | REQUIRED |
+| `^` | Beginning of document (prepend) | REQUIRED |
+| `$` | End of document (append) | REQUIRED |
+
+### Behavior
+
+- `^$` — Implementations MUST check that the document body is empty (no non-whitespace content). If the document is not empty, the expression MUST be a no-op.
+- `^` — Implementations MUST insert the replacement at the beginning of the document body (index 1).
+- `$` — Implementations MUST insert the replacement at the end of the document body.
+
+### Examples
 
 ```bash
-# Background color
-s/|1|[A1]/bg=#ff0000/
+# Insert text into an empty document
+s/^$/Hello world/
 
-# Header row background
-s/|1|[1,*]/bg=#eeeeee/
+# Prepend title to any document
+s/^/{h=t t=Document Title}\n/
 
-# Combined: set content + style
-s/|1|[A1]/{bg=#ffff00}Important/
+# Append footer
+s/$/\nGenerated on 2026-02-17/
+
+# Insert table at start
+s/^/|3x4|\n/
 ```
 
-## People / Mentions
+Positional insert MUST support all replacement features (formatting, images, tables, headings, lists, etc.).
 
-**Status**: PROPOSED
+---
 
-```bash
-# Insert mention
-s/TODO/@john@example.com/
-```
+## CLI Modes ✅ STABLE
 
-## CLI Modes
-
-### Dry-Run Mode ✅ STABLE
+### Dry-Run Mode
 
 The `--dry-run` (or `-n`) flag shows what changes would be made without modifying the document:
 
@@ -709,7 +910,7 @@ gog docs sed -n 's/old/new/' <doc-id>
 
 Implementations MUST display the matches and proposed changes, and MUST NOT modify the document.
 
-### Batch Processing ✅ STABLE
+### Batch Processing
 
 The `-f` flag reads expressions from a file (one per line). Lines starting with `#` are comments:
 
@@ -720,8 +921,8 @@ gog docs sed -f transforms.sed <doc-id>
 **transforms.sed:**
 ```sed
 # Header formatting
-s/TITLE/# My Report/
-s/SUBTITLE/## Q4 Results/
+s/TITLE/{h=t}/
+s/SUBTITLE/{h=s}/
 
 # Clean up
 s/DRAFT//g
@@ -730,6 +931,8 @@ d/TODO/
 # Add footer
 s/$/\nGenerated automatically/
 ```
+
+---
 
 ## Processing Modes
 
@@ -748,321 +951,189 @@ s/2023/2024/g             # Numeric
 Required when formatting is present:
 
 ```bash
-s/foo/**foo**/g                        # Bold
-s/bar/[bar](https:\/\/bar.com)/g       # Link
-s/{{IMG}}/!(https:\/\/img.png)/        # Image
+s/foo/{b}/g                            # Brace syntax
+s/bar/{u=https://bar.com}/g            # Link
+s/{{IMG}}/!(https://img.png)/          # Image
 ```
 
-## Escaping
+---
+
+## Escaping ✅ STABLE
 
 ### Special Characters
 
 Characters with special meaning MUST be escaped with backslash:
 
-Character | Escape | Context
---- | --- | ---
-`/` | `\/` | When used as delimiter
-`*` | `\*` | Literal asterisk
-`[` | `\[` | Literal bracket
-`]` | `\]` | Literal bracket
-`(` | `\(` | Literal paren (in replacement)
-`)` | `\)` | Literal paren (in replacement)
-`$` | `$$` | Literal dollar sign (in replacement)
-`&` | `\&` | Literal ampersand (in replacement)
-`\` | `\\` | Literal backslash
+| Character | Escape | Context |
+|-----------|--------|---------|
+| `/` | `\/` | When used as delimiter |
+| `*` | `\*` | Literal asterisk |
+| `[` | `\[` | Literal bracket |
+| `]` | `\]` | Literal bracket |
+| `(` | `\(` | Literal paren (in replacement) |
+| `)` | `\)` | Literal paren (in replacement) |
+| `$` | `$$` | Literal dollar sign (in replacement) |
+| `&` | `\&` | Literal ampersand (in replacement) |
+| `\` | `\\` | Literal backslash |
+| `{` | `\{` | Literal brace (in replacement) |
+| `}` | `\}` | Literal brace (in replacement) |
 
-## Style Attributes — 🔮 PROPOSED
+---
 
-> **Status**: PROPOSED — not yet implemented (except `{super=}`, `{sub=}`, `{baseline=}` which are STABLE).
+## Markdown Formatting — Convenience Alternatives
 
-SEDMAT uses `{key:value}` curly brace syntax in two positions:
+> **Note**: This section describes Markdown shortcuts that serve as a convenience layer. The canonical formatting system is [Brace Syntax](#brace-syntax--canonical-formatting-dsl--stable). Implementations MUST support brace syntax; Markdown shortcuts are RECOMMENDED.
 
-### 1. Inline Spans (within replacement text)
+For users familiar with Markdown, SEDMAT supports common Markdown formatting syntax as an alternative to brace syntax. These produce identical output.
 
-The `{key:value:text}` pattern applies a style to a portion of text. Superscript and subscript (`{super=}`, `{sub=}`) are STABLE; other style keys are PROPOSED:
+### Inline Styles
 
-```bash
-# STABLE
-s/H2O/H{sub=2}O/
-s/TM/{super=TM}/
+| Syntax | Brace Equivalent | Effect |
+|--------|------------------|--------|
+| `**text**` | `{b t=text}` | Bold |
+| `*text*` | `{i t=text}` | Italic |
+| `_text_` | `{i t=text}` | Italic |
+| `***text***` | `{b i t=text}` | Bold + Italic |
+| `~~text~~` | `{- t=text}` | Strikethrough |
+| `` `text` `` | `{# t=text}` | Monospace |
+| `__text__` | `{_ t=text}` | Underline |
 
-# PROPOSED
-s/error/{color=#FF0000:error} detected/
-s/code/{font=Courier:monospaced text}/
-s/big/{size=24:large text}/
-```
-
-### 2. Expression-Level Attributes (after flags)
-
-Curly brace attributes after the closing delimiter apply to the entire replacement, following Pandoc/kramdown convention:
-
-```bash
-s/foo/bar/{font=Roboto size=14 color=#FF0000}
-s/title/# Report/{font=Montserrat size=28 break=page}
-```
-
-### Supported Attributes (Proposed)
-
-Attribute | Inline `{k:v:text}` | Expression-level `/{k:v}` | Effect
---- | --- | --- | ---
-`font:name` | 🔮 | 🔮 | Font family
-`size:N` | 🔮 | 🔮 | Font size in points
-`color:#RRGGBB` | 🔮 | 🔮 | Text color
-`bg:#RRGGBB` | 🔮 | 🔮 | Background/highlight color
-`super` / `sub` | ✅ | — | Super/subscript (inline span)
-`baseline:super\|sub` | ✅ | — | Whole-replacement baseline
-`break:page` | — | 🔮 | Insert page break after
-`break:section` | — | 🔮 | Insert section break after
-
-## Brace Syntax — Compact Formatting DSL ✅ STABLE
-
-> **Status**: ✅ STABLE — Brace Syntax is the canonical formatting system in SEDMAT. All brace syntax features are REQUIRED. Markdown formatting alternatives (e.g., `**bold**`, `*italic*`) are RECOMMENDED convenience shortcuts but are not the primary syntax.
-
-Brace Syntax is the primary formatting system in SEDMAT replacement strings. It uses `{key value}` pairs inside curly braces to specify formatting, structural, and semantic attributes. Brace Syntax coexists with Markdown — both are valid — but brace syntax is the canonical form. Implementations MUST support brace syntax; Markdown formatting is RECOMMENDED.
-
-### Overview
-
-Where Markdown uses wrapper characters (`**bold**`, `*italic*`), Brace Syntax uses flag-based declarations:
+**Examples:**
 
 ```bash
-# Markdown style
-s/error/**error**/g
+# These pairs are equivalent:
+s/warning/**warning**/g       # Markdown
+s/warning/{b}/g               # Brace (preferred)
 
-# Brace Syntax equivalent
-s/error/{b}/g
+s/emphasis/*emphasis*/g       # Markdown
+s/emphasis/{i}/g              # Brace (preferred)
 
-# Brace Syntax with color (no Markdown equivalent)
-s/error/{b c=red}/g
+s/deprecated/~~deprecated~~/g # Markdown
+s/deprecated/{-}/g            # Brace (preferred)
 ```
 
-Brace Syntax is particularly useful for expressing attributes that have no Markdown equivalent (color, font, size, background, headings, breaks, comments, bookmarks, smart chips).
+### Headings
 
-### Boolean Flags
+| Syntax | Brace Equivalent | Effect |
+|--------|------------------|--------|
+| `# text` | `{h=1 t=text}` | Heading 1 |
+| `## text` | `{h=2 t=text}` | Heading 2 |
+| `### text` | `{h=3 t=text}` | Heading 3 |
+| `#### text` | `{h=4 t=text}` | Heading 4 |
+| `##### text` | `{h=5 t=text}` | Heading 5 |
+| `###### text` | `{h=6 t=text}` | Heading 6 |
 
-Boolean flags are activated by presence alone. No `=y` is needed.
-
-| Short | Long | Effect |
-|-------|------|--------|
-| `b` | `bold` | Bold |
-| `i` | `italic` | Italic |
-| `_` | `underline` | Underline |
-| `-` | `strike` | Strikethrough |
-| `#` | `code` | Monospace/code |
-| `^` | `sup` | Superscript |
-| `,` | `sub` | Subscript |
-| `w` | `smallcaps` | Small caps |
-
-**Negation**: Use `!` prefix or `=n` suffix to explicitly turn off a flag:
+**Examples:**
 
 ```bash
-s/already bold/{!b}/g     # Remove bold
-s/already bold/{b=n}/g    # Equivalent
+# These pairs are equivalent:
+s/TITLE/# My Document/        # Markdown
+s/TITLE/{h=1 t=My Document}/  # Brace
+
+s/Introduction/## Introduction/  # Markdown
+s/Introduction/{h=2}/            # Brace (preserves text)
 ```
 
-**Combining**: Multiple boolean flags MAY appear in a single brace group:
-
-```bash
-s/critical/{b i _}/g      # Bold + italic + underline
-s/code/{# -}/g            # Monospace + strikethrough
-```
-
-### Value Flags
-
-Value flags use `key=value` syntax. When a value flag appears **bare** (without `=value`), it resets to its default.
-
-| Short | Long | Default (bare) | Effect |
-|-------|------|----------------|--------|
-| `t` | `text` | `$0` (matched text) | Replacement text |
-| `c` | `color` | black | Text color |
-| `z` | `bg` | clear | Background color |
-| `f` | `font` | Arial | Font family |
-| `s` | `size` | 11pt | Font size |
-| `u` | `url` | (strip link) | Link/URL/URI |
-| `l` | `leading` | 1.15 | Line height |
-| `a` | `align` | left | Text alignment |
-| `o` | `opacity` | 100 | Opacity (percentage) |
-| `n` | `indent` | 0 | Indent level |
-| `k` | `kerning` | 0 | Letter spacing |
-| `x` | `width` | — | Width in pixels |
-| `y` | `height` | — | Height in pixels |
-| `p` | `spacing` | — | Paragraph spacing above/below |
-| `h` | `heading` | NORMAL_TEXT | Heading level |
-| `e` | `effect` | — | Shadow/glow/blur |
-
-### Key Design Rules
-
-1. **`t=` defaults to `$0`** — The matched text is preserved unless explicitly overridden with `t=replacement`.
-2. **Boolean flags need no `=y`** — Simply `{b i _}` for bold + italic + underline.
-3. **Bare value flags reset to defaults** — `{f s c z}` resets font to Arial, size to 11pt, color to black, background to clear. This is equivalent to "reset all formatting."
-4. **`{0}` resets ALL formatting** — Acts like CSS `all: unset`. Clears every style attribute to its default. MAY be combined with new flags: `{0 b}` resets everything then applies bold.
-
-### Heading Shorthands
-
-The `h` flag controls heading level using compact shorthands:
-
-| Syntax | Maps to |
-|--------|---------|
-| `h=t` | TITLE |
-| `h=s` | SUBTITLE |
-| `h=1` through `h=6` | HEADING_1 through HEADING_6 |
-| `h` (bare) | NORMAL_TEXT (reset heading) |
-
-```bash
-s/My Document/{h=t}/g         # Set as Title
-s/Overview/{h=s}/g             # Set as Subtitle
-s/Chapter 1/{h=1 b}/g         # Heading 1 + bold
-s/normal paragraph/{h}/g       # Reset to normal text
-```
-
-### Breaks: `+` Key
-
-The `+` key inserts structural breaks. When used alone, it inserts a horizontal rule. With a value, it specifies the break type:
+### Lists
 
 | Syntax | Effect |
 |--------|--------|
-| `{+}` | Horizontal rule (default) |
-| `{+=p}` | Page break |
-| `{+=c}` | Column break |
-| `{+=s}` | Section break |
+| `- item` | Bullet list item |
+| `1. item` | Numbered list item |
+| `  - nested` | Nested bullet (L1, 2 spaces) |
+| `    - nested` | Nested bullet (L2, 4 spaces) |
+| `  1. nested` | Nested numbered (L1, 2 spaces) |
+| `    1. nested` | Nested numbered (L2, 4 spaces) |
+
+**Examples:**
 
 ```bash
-s/---/{+}/g                    # Horizontal rule
-s/END/{+=p}/g                  # Page break
-s/COLUMN_BREAK/{+=c}/g        # Column break
+# Create a bullet list
+s/ITEMS/- First item\n- Second item\n- Third item/
+
+# Numbered list
+s/STEPS/1. Step one\n2. Step two\n3. Step three/
+
+# Nested lists
+s/OUTLINE/- Top level\n  - Nested L1\n    - Nested L2/
 ```
 
-### Comments: `"` Key
+### Horizontal Rules
 
-The `"` key attaches a comment (annotation) to the matched text:
-
-| Syntax | Effect |
-|--------|--------|
-| `{"=text}` | Adds a comment to the matched text |
+Three or more of `-`, `*`, or `_` on a line create a horizontal rule:
 
 ```bash
-s/TODO/{"=needs review b c=red}/g   # Comment + bold + red
+s/DIVIDER/---/
+s/BREAK/***/
+s/SEPARATOR/___/
 ```
 
-### Bookmarks: `@` Key
+Brace equivalent: `{+}`
 
-The `@` key creates a bookmark anchor. Combined with `u=#name`, this enables internal document linking:
+### Blockquotes
 
-| Syntax | Effect |
-|--------|--------|
-| `{@=name}` | Creates a bookmark anchor on the matched text |
-| `{u=#name}` | Links to a bookmark by name |
+Lines prefixed with `>` create blockquotes (left-indented with grey left border):
 
 ```bash
-s/Chapter 1/{@=ch1 h=1}/g            # Bookmark + heading
-s/see Chapter 1/{u=#ch1 c=blue _}/g  # Link to bookmark
+s/QUOTE/> This is a blockquote/
+s/EPIGRAPH/> To be or not to be\n> That is the question/
 ```
 
-### URI Schemes for `u=`
+### Code Blocks
 
-The `u` flag accepts any valid URI. SEDMAT defines standard schemes and custom `chip://` schemes for Google Docs smart chips.
-
-#### Standard Schemes
-
-| Scheme | Example |
-|--------|---------|
-| `https://` | `{u=https://deft.md}` |
-| `mailto:` | `{u=mailto:viz@example.com}` |
-| `tel:` | `{u=tel:+14076163470}` |
-| `geo:` | `{u=geo:28.69,-81.31}` |
-| `sms:` | `{u=sms:+14076163470}` |
-| `webcal:` | `{u=webcal://feed.ics}` |
-| `file:` | `{u=file:///path}` |
-
-#### Custom `chip://` Schemes
-
-For Google Docs smart chip insertion:
-
-| Scheme | Example | Effect |
-|--------|---------|--------|
-| `chip://person/` | `{u=chip://person/viz@example.com}` | Person smart chip |
-| `chip://date/` | `{u=chip://date/2026-03-15}` | Date smart chip |
-| `chip://file/` | `{u=chip://file/DOC_ID}` | File link chip |
-| `chip://place/` | `{u=chip://place/Orlando, FL}` | Place chip |
-| `chip://dropdown/` | `{u=chip://dropdown/Draft\|Review\|Done}` | Dropdown chip |
-| `chip://chart/` | `{u=chip://chart/SHEET_ID/0}` | Chart embed |
-| `chip://bookmark/` | `{u=chip://bookmark/section-1}` | Internal doc link |
-
-### Charts
-
-Two approaches for embedding charts from Google Sheets:
-
-1. **Direct reference**: `{u=chip://chart/SHEET_ID/CHART_INDEX x=600 y=400}` — pulls a chart from a linked Sheet and embeds it at the specified dimensions.
-2. **Pipe**: `gog sheets chart SHEET_ID 0 --png | gog docs sed DOC_ID 's/PLACEHOLDER/!(-)/g'` — export chart as image, then insert via Unix pipe composition.
-
-### Brace Syntax Examples
+Triple backtick fences create code blocks (Courier New font, grey background). Language hints after the opening fence are stripped:
 
 ```bash
-# Simple styling
-s/error/{b c=red}/g
-s/TODO/{b c=red z=yellow}/g
-s/note/{i c=gray s=10}/g
-
-# Reset formatting
-s/messy text/{0}/g
-s/messy text/{0 b}/g          # reset then bold
-
-# Links and chips
-s/viz/{u=chip://person/jtaylor@zendicate.com}/g
-s/deadline/{u=chip://date/2026-03-15}/g
-s/call me/{u=tel:+14075551234}/g
-
-# Headings
-s/My Doc/{h=t}/g
-s/Overview/{h=s}/g
-s/Chapter 1/{h=1 b}/g
-
-# Breaks
-s/END/{+=p}/g
-s/---/{+}/g
-
-# Comments and bookmarks
-s/TODO/{@=todo1 "=needs review b c=red}/g
-s/see above/{u=#todo1 c=blue _}/g
-
-# Combined
-s/WARNING/{b i c=red s=14 z=yellow}/g
-s/https\S+/{u=$0 c=blue _}/g
+s/CODE/```\nfunction hello() {\n  console.log("hi");\n}\n```/
+s/SNIPPET/```python\nprint("hello")\n```/
 ```
 
-## Document-Level Directives — 🔮 PROPOSED
+### Footnotes
 
-> **Status**: PROPOSED — not yet implemented.
-
-Standalone lines using `!^!{key:value ...}` for page-level settings:
+The `[^text]` syntax creates native footnotes in the target document:
 
 ```bash
-!^!{margin=1in size=letter orientation=portrait}
-!^!{header=Company Name header-font:Arial header-size:9}
-!^!{footer=Page {{page}} of {{pages}} footer-align:center}
+s/citation/[^See Smith et al., 2024]/
+s/note/[^This is a footnote with detailed explanation]/
 ```
 
-### Supported Directives (Proposed)
+### Combining Markdown Formats
 
-Key | Effect
---- | ---
-`margin:SIZE` | Page margins (e.g., `1in`, `2.5cm`)
-`size:FORMAT` | Page size (`letter`, `A4`, etc.)
-`orientation:VALUE` | `portrait` or `landscape`
-`header:TEXT` | Header text
-`header-font:NAME` | Header font
-`header-size:N` | Header font size
-`header-align:VALUE` | Header alignment (`left`, `center`, `right`)
-`footer:TEXT` | Footer text (supports `{{page}}`, `{{pages}}`)
-`footer-font:NAME` | Footer font
-`footer-size:N` | Footer font size
-`footer-align:VALUE` | Footer alignment
+Formats MAY be nested according to Markdown precedence:
+
+```bash
+# Bold AND italic
+s/warning/***warning***/
+
+# Bold and underline
+s/critical/**__critical__**/
+```
+
+**Processing Order:**
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
+graph LR
+    TEXT[text] --> U["__underline__"]
+    U --> B["**bold**"]
+    B --> I["*italic*"]
+    I --> FINAL["***__text__***"]
+    
+    style TEXT fill:#2a2a2a,color:#ffffff,stroke:#555555
+    style FINAL fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
+```
+
+Implementations MUST process nesting from innermost to outermost.
+
+---
 
 ## Grammar
 
 ### ABNF Notation
 
 ```abnf
-sedmat-line    = sedmat-expr / directive
+sedmat-line    = sedmat-expr / comment
+comment        = "#" *VCHAR
 
 ; --- Commands ---
 sedmat-expr    = subst-expr / delete-expr / append-expr / insert-expr / xlat-expr
@@ -1081,13 +1152,62 @@ source-chars   = 1*CHAR
 dest-chars     = 1*CHAR          ; Must be same length as source-chars
 
 ; --- Flags ---
-flags          = *( "g" / DIGIT / "m" ) [style-attrs]
+flags          = *( "g" / DIGIT / "m" )
 
 ; --- Replacement ---
-replacement    = *( plain-text / format-expr / back-ref / image-expr
+replacement    = *( plain-text / brace-expr / format-expr / back-ref / image-expr
                    / link-expr / table-expr / heading-expr / list-expr
-                   / block-expr / footnote-expr / super-sub / brace-expr )
+                   / block-expr / footnote-expr )
 
+; --- Brace Syntax (v3.0) ---
+brace-expr     = "{" brace-body "}"
+brace-body     = reset-all / brace-flags
+reset-all      = "0" *( SP brace-flag )                  ; {0} or {0 b i}
+
+brace-flags    = brace-flag *( SP brace-flag )
+brace-flag     = bool-flag / neg-flag / value-flag / break-flag
+                 / comment-flag / bookmark-flag / inline-wrapper
+
+bool-flag      = "b" / "bold" / "i" / "italic" / "_" / "underline"
+                 / "-" / "strike" / "#" / "code" / "^" / "sup"
+                 / "," / "sub" / "w" / "smallcaps"
+
+neg-flag       = "!" bool-flag / bool-flag "=n"          ; Negation
+
+value-flag     = val-key "=" val-value
+val-key        = "t" / "text" / "c" / "color" / "z" / "bg"
+                 / "f" / "font" / "s" / "size" / "u" / "url"
+                 / "l" / "leading" / "a" / "align" / "o" / "opacity"
+                 / "n" / "indent" / "k" / "kerning" / "x" / "width"
+                 / "y" / "height" / "p" / "spacing" / "h" / "heading"
+                 / "e" / "effect"
+val-value      = 1*(%x21-7E)                             ; Non-space printable ASCII
+
+break-flag     = "+" ["=" break-type]
+break-type     = "p" / "c" / "s"                         ; page / column / section
+
+comment-flag   = DQUOTE "=" comment-text
+comment-text   = 1*(%x20-7E)                             ; Printable ASCII incl. space
+
+bookmark-flag  = "@" "=" bookmark-name
+bookmark-name  = 1*(%x21-7E)
+
+inline-wrapper = ("super" / "sub") "=" wrapper-text
+wrapper-text   = 1*(%x21-7E)
+
+heading-value  = "t" / "s" / "1" / "2" / "3" / "4" / "5" / "6"
+                 ; t=TITLE, s=SUBTITLE, 1-6=HEADING_1-6
+
+uri-value      = standard-uri / chip-uri / bookmark-uri
+standard-uri   = scheme ":" *(%x21-7E)
+scheme         = "https" / "http" / "mailto" / "tel" / "geo"
+                 / "sms" / "webcal" / "file"
+chip-uri       = "chip://" chip-type "/" *(%x21-7E)
+chip-type      = "person" / "date" / "file" / "place"
+                 / "dropdown" / "chart" / "bookmark"
+bookmark-uri   = "#" bookmark-name                        ; {u=#name}
+
+; --- Markdown Formatting (convenience layer) ---
 format-expr    = bold / italic / bold-italic / strike / mono / underline
 
 bold           = "**" content "**"
@@ -1096,13 +1216,6 @@ bold-italic    = "***" content "***"
 strike         = "~~" content "~~"
 mono           = "`" content "`"
 underline      = "__" content "__"
-
-super-sub      = inline-span / superscript-dep / subscript-dep
-inline-span    = "{" span-key ":" span-value [":" content] "}"
-span-key       = "super" / "sub" / "baseline" / "color" / "font" / "size" / "bg"
-span-value     = content
-superscript-dep = "^{" content "}"    ; DEPRECATED — use {super=text}
-subscript-dep  = "~{" content "}"     ; DEPRECATED — use {sub=text}
 
 footnote-expr  = "[^" content "]"
 
@@ -1129,8 +1242,8 @@ image-insert   = "![" [alt-text] "](" url ")" [dimensions]
 image-ref      = "!(" index ")" / "![" regex "]"
 
 dimensions     = "{" *( dim-spec SP ) "}"
-dim-spec       = ("width" / "w") "=" NUMBER
-               / ("height" / "h") "=" NUMBER
+dim-spec       = ("width" | "w" | "x") "=" NUMBER
+               / ("height" | "h" | "y") "=" NUMBER
 
 positional-pat = "^$" / "^" / "$"
 
@@ -1149,124 +1262,135 @@ row-op         = "row:" ("+" DIGIT+ / "$+" / ["-"] DIGIT+)
 col-op         = "col:" ("+" DIGIT+ / "$+" / ["-"] DIGIT+)
 merge-range    = (DIGIT+ / ALPHA+DIGIT+) "," (DIGIT+ / ALPHA+DIGIT+) ":"
                  (DIGIT+ / ALPHA+DIGIT+) "," (DIGIT+ / ALPHA+DIGIT+)
-
-; --- Proposed: Style Attributes (legacy) ---
-style-attrs    = "{" attr-pair *( SP attr-pair ) "}"     ; 🔮 PROPOSED
-attr-pair      = attr-key ":" attr-value
-
-; --- Proposed: Document Directives ---
-directive      = "!^!{" attr-pair *( SP attr-pair ) "}"  ; 🔮 PROPOSED
-
-; --- Brace Syntax (v3.0) ---
-brace-expr     = "{" brace-body "}"
-brace-body     = reset-all / brace-flags
-reset-all      = "0" *( SP brace-flag )                  ; {0} or {0 b i}
-
-brace-flags    = brace-flag *( SP brace-flag )
-brace-flag     = bool-flag / neg-flag / value-flag / break-flag
-                 / comment-flag / bookmark-flag
-
-bool-flag      = "b" / "bold" / "i" / "italic" / "_" / "underline"
-                 / "-" / "strike" / "#" / "code" / "^" / "sup"
-                 / "," / "sub" / "w" / "smallcaps"
-
-neg-flag       = "!" bool-flag / bool-flag "=n"          ; Negation
-
-value-flag     = val-key "=" val-value
-val-key        = "t" / "text" / "c" / "color" / "z" / "bg"
-                 / "f" / "font" / "s" / "size" / "u" / "url"
-                 / "l" / "leading" / "a" / "align" / "o" / "opacity"
-                 / "n" / "indent" / "k" / "kerning" / "x" / "width"
-                 / "y" / "height" / "p" / "spacing" / "h" / "heading"
-                 / "e" / "effect"
-val-value      = 1*(%x21-7E)                             ; Non-space printable ASCII
-
-break-flag     = "+" ["=" break-type]
-break-type     = "p" / "c" / "s"                         ; page / column / section
-
-comment-flag   = DQUOTE "=" comment-text
-comment-text   = 1*(%x20-7E)                             ; Printable ASCII incl. space
-
-bookmark-flag  = "@" "=" bookmark-name
-bookmark-name  = 1*(%x21-7E)
-
-heading-value  = "t" / "s" / "1" / "2" / "3" / "4" / "5" / "6"
-                 ; t=TITLE, s=SUBTITLE, 1-6=HEADING_1-6
-
-uri-value      = standard-uri / chip-uri / bookmark-uri
-standard-uri   = scheme ":" *(%x21-7E)
-scheme         = "https" / "http" / "mailto" / "tel" / "geo"
-                 / "sms" / "webcal" / "file"
-chip-uri       = "chip://" chip-type "/" *(%x21-7E)
-chip-type      = "person" / "date" / "file" / "place"
-                 / "dropdown" / "chart" / "bookmark"
-bookmark-uri   = "#" bookmark-name                        ; {u=#name}
 ```
+
+---
+
+## Conformance Levels
+
+### Level 1: Core (REQUIRED)
+
+- Basic `s/pattern/replacement/` and `s/pattern/replacement/g`
+- Flags: `g`, `n` (nth occurrence), `m` (multiline)
+- Brace syntax: boolean flags (`{b}`, `{i}`, `{_}`, `{-}`, `{#}`, `{^}`, `{,}`, `{w}`), negation (`{!b}`, `{b=n}`)
+- Brace syntax: value flags (`{c=}`, `{z=}`, `{f=}`, `{s=}`, `{u=}`, `{t=}`, `{l=}`, `{a=}`, `{o=}`, `{n=}`, `{k=}`, `{x=}`, `{y=}`, `{p=}`, `{h=}`, `{e=}`)
+- Brace syntax: reset (`{0}`)
+- Brace syntax: implicit `t=$0` behavior
+- Back-references: `$1`-`$9`, `$0`, `&`, `$$` escaping
+- Links: `[text](url)`, `<url>`, `{u=url}`
+
+### Level 2: Extended (REQUIRED)
+
+- All Level 1 features
+- Image insertion: `![alt](url)`, `!(url)`
+- Image dimensions: `{width=N}`, `{height=N}`, `{x=N y=M}`
+- Image references: `!(n)`, `!(-n)`, `!(*)`
+- Alt-text matching: `![regex]`
+- Brace syntax: heading shorthands (`{h=t}`, `{h=s}`, `{h=1}`–`{h=6}`)
+- Brace syntax: superscript/subscript (`{^}`, `{,}`, `{super=text}`, `{sub=text}`, `{baseline=super|sub}`)
+
+### Level 3: Structural (REQUIRED)
+
+- All Level 2 features
+- Positional insert: `^$`, `^`, `$`
+- Table creation: `|RxC|`, `|RxC:header|`, pipe table syntax
+- Table deletion: `|N|`, `|-N|`, `|*|`
+- Cell references: `[A1]`, `[R,C]`, wildcards
+- Row/column operations
+- Table merge
+- Brace syntax: breaks (`{+}`, `{+=p}`, `{+=c}`, `{+=s}`)
+- Brace syntax: comments (`{"=text}`)
+- Brace syntax: bookmarks (`{@=name}`, `{u=#name}`)
+
+### Level 4: Commands & CLI (REQUIRED)
+
+- All Level 3 features
+- Delete command: `d/pattern/`
+- Append command: `a/pattern/text/`
+- Insert command: `i/pattern/text/`
+- Transliterate command: `y/source/dest/`
+- Dry-run mode: `--dry-run` / `-n`
+- Batch processing: `-f file.sed`
+
+### Level 5: Smart Chips & Charts (REQUIRED)
+
+- All Level 4 features
+- URI schemes: standard (`https:`, `mailto:`, `tel:`, `geo:`, `sms:`, `webcal:`, `file:`)
+- URI schemes: `chip://` smart chips (person, date, file, place, dropdown, chart, bookmark)
+- Charts: `chip://chart/` references
+
+### Level 6: Markdown Convenience (RECOMMENDED)
+
+- All Level 5 features
+- Markdown shortcuts: `**bold**`, `*italic*`, `` `mono` ``, `~~strike~~`, `__underline__`
+- Markdown headings: `#` through `######`
+- Markdown lists: `- bullet`, `1. numbered`, nested
+- Markdown blocks: `---` (horizontal rule), `> quote`, ``` code blocks ```
+- Footnotes: `[^text]`
+
+### Level 7: Advanced (OPTIONAL)
+
+- All Level 6 features
+- Range references (`[A1:C3]`)
+- Cell styling
+- @ mentions
+
+---
 
 ## Implementation Status
 
-Feature | Status | Requirement Level
---- | --- | ---
-Basic `s///` syntax | ✅ Stable | REQUIRED
-Global flag `g` | ✅ Stable | REQUIRED
-Nth occurrence flag `n` | ✅ Stable | REQUIRED
-Multiline flag `m` | ✅ Stable | REQUIRED
-Text formatting — Markdown (`**`, `*`, `` ` ``, `~~`) | ✅ Stable | RECOMMENDED
-Underline `__text__` | ✅ Stable | OPTIONAL
-Back-references `$1`-`$9`, `&` | ✅ Stable | REQUIRED
-Dollar sign escaping `$$` | ✅ Stable | REQUIRED
-Whole-match `&` / literal `\&` | ✅ Stable | REQUIRED
-Links `[text](url)` | ✅ Stable | REQUIRED
-Auto-links `<url>` | ✅ Stable | REQUIRED
-Image insert `![](url)`, `!(url)` | ✅ Stable | REQUIRED
-Image dimensions `{width=N}` | ✅ Stable | REQUIRED
-Image references `!(n)`, `![regex]` | ✅ Stable | REQUIRED
-Native regex mode | ✅ Stable | RECOMMENDED
-Positional insert (`^$`, `^`, `$`) | ✅ Stable | REQUIRED
-Headings (`#` through `######`) | ✅ Stable | REQUIRED
-Bullet lists (`- item`) | ✅ Stable | REQUIRED
-Numbered lists (`1. item`) | ✅ Stable | REQUIRED
-Nested lists (indentation) | ✅ Stable | REQUIRED
-Horizontal rules (`---`, `***`, `___`) | ✅ Stable | REQUIRED
-Blockquotes (`> text`) | ✅ Stable | REQUIRED
-Code blocks (triple backtick) | ✅ Stable | REQUIRED
-Inline spans `{key:value:text}` | ✅ Stable | REQUIRED
-Superscript `{super=text}` | ✅ Stable | REQUIRED
-Subscript `{sub=text}` | ✅ Stable | REQUIRED
-Whole-replacement `{baseline=super\|sub}` | ✅ Stable | REQUIRED
-Legacy `^{text}`, `~{text}` (deprecated) | ✅ Stable | REQUIRED
-Footnotes `[^text]` | ✅ Stable | REQUIRED
-Delete command `d/pattern/` | ✅ Stable | REQUIRED
-Append command `a/pattern/text/` | ✅ Stable | REQUIRED
-Insert command `i/pattern/text/` | ✅ Stable | REQUIRED
-Transliterate command `y/src/dst/` | ✅ Stable | REQUIRED
-Table creation (`\|RxC\|`) | ✅ Stable | REQUIRED
-Pipe table syntax | ✅ Stable | REQUIRED
-Table deletion (`\|N\|`, `\|*\|`) | ✅ Stable | REQUIRED
-Cell references (`[A1]`, `[R,C]`) | ✅ Stable | REQUIRED
-Cell wildcards (`[1,*]`, `[*,2]`, `[*,*]`) | ✅ Stable | REQUIRED
-Row operations (insert/delete/append) | ✅ Stable | REQUIRED
-Column operations (insert/delete/append) | ✅ Stable | REQUIRED
-Table merge (`[r1,c1:r2,c2]/merge/`) | ✅ Stable | REQUIRED
-Dry-run mode (`--dry-run`, `-n`) | ✅ Stable | REQUIRED
-Batch processing (`-f file.sed`) | ✅ Stable | REQUIRED
-Range references (`[A1:C3]`) | 🔮 Proposed | OPTIONAL
-Table cell styling | 🔮 Proposed | OPTIONAL
-Style attributes `{key:value}` | 🔮 Proposed | OPTIONAL
-Document directives `!^!{}` | 🔮 Proposed | OPTIONAL
-@ mentions | 🔮 Proposed | OPTIONAL
-Brace syntax: basic parsing | ✅ Stable | REQUIRED
-Brace syntax: boolean flags (`b`, `i`, `_`, `-`, `#`, `^`, `,`, `w`) | ✅ Stable | REQUIRED
-Brace syntax: negation (`!b`, `b=n`) | ✅ Stable | REQUIRED
-Brace syntax: value flags (`c=`, `z=`, `f=`, `s=`, etc.) | ✅ Stable | REQUIRED
-Brace syntax: text flag (`t=`) | ✅ Stable | REQUIRED
-Brace syntax: heading shorthands (`h=t`, `h=1`, etc.) | ✅ Stable | REQUIRED
-Brace syntax: breaks (`{+}`, `{+=p}`, etc.) | ✅ Stable | REQUIRED
-Brace syntax: comments (`{"=text}`) | ✅ Stable | REQUIRED
-Brace syntax: bookmarks (`{@=name}`) | ✅ Stable | REQUIRED
-Brace syntax: URL/link (`u=`) | ✅ Stable | REQUIRED
-Brace syntax: `chip://` smart chips | ✅ Stable | REQUIRED
-Brace syntax: reset (`{0}`) | ✅ Stable | REQUIRED
+| Feature | Status | Requirement Level |
+|---------|--------|-------------------|
+| Basic `s///` syntax | ✅ Stable | REQUIRED |
+| Global flag `g` | ✅ Stable | REQUIRED |
+| Nth occurrence flag `n` | ✅ Stable | REQUIRED |
+| Multiline flag `m` | ✅ Stable | REQUIRED |
+| Brace syntax: basic parsing | ✅ Stable | REQUIRED |
+| Brace syntax: boolean flags (`b`, `i`, `_`, `-`, `#`, `^`, `,`, `w`) | ✅ Stable | REQUIRED |
+| Brace syntax: negation (`!b`, `b=n`) | ✅ Stable | REQUIRED |
+| Brace syntax: value flags (`c=`, `z=`, `f=`, `s=`, etc.) | ✅ Stable | REQUIRED |
+| Brace syntax: text flag (`t=`) with implicit `$0` | ✅ Stable | REQUIRED |
+| Brace syntax: reset (`{0}`) | ✅ Stable | REQUIRED |
+| Brace syntax: heading shorthands (`h=t`, `h=1`, etc.) | ✅ Stable | REQUIRED |
+| Brace syntax: breaks (`{+}`, `{+=p}`, etc.) | ✅ Stable | REQUIRED |
+| Brace syntax: comments (`{"=text}`) | ✅ Stable | REQUIRED |
+| Brace syntax: bookmarks (`{@=name}`) | ✅ Stable | REQUIRED |
+| Brace syntax: URL/link (`u=`) | ✅ Stable | REQUIRED |
+| Brace syntax: `chip://` smart chips | ✅ Stable | REQUIRED |
+| Brace syntax: superscript/subscript (`{^}`, `{,}`, `{super=}`, `{sub=}`) | ✅ Stable | REQUIRED |
+| Back-references `$1`-`$9`, `$0`, `&` | ✅ Stable | REQUIRED |
+| Dollar sign escaping `$$` | ✅ Stable | REQUIRED |
+| Links `[text](url)`, `{u=url}` | ✅ Stable | REQUIRED |
+| Auto-links `<url>` | ✅ Stable | REQUIRED |
+| Image insert `![](url)`, `!(url)` | ✅ Stable | REQUIRED |
+| Image dimensions `{width=N}`, `{x=N y=M}` | ✅ Stable | REQUIRED |
+| Image references `!(n)`, `![regex]` | ✅ Stable | REQUIRED |
+| Native regex mode | ✅ Stable | RECOMMENDED |
+| Positional insert (`^$`, `^`, `$`) | ✅ Stable | REQUIRED |
+| Delete command `d/pattern/` | ✅ Stable | REQUIRED |
+| Append command `a/pattern/text/` | ✅ Stable | REQUIRED |
+| Insert command `i/pattern/text/` | ✅ Stable | REQUIRED |
+| Transliterate command `y/src/dst/` | ✅ Stable | REQUIRED |
+| Table creation (`\|RxC\|`) | ✅ Stable | REQUIRED |
+| Pipe table syntax | ✅ Stable | REQUIRED |
+| Table deletion (`\|N\|`, `\|*\|`) | ✅ Stable | REQUIRED |
+| Cell references (`[A1]`, `[R,C]`) | ✅ Stable | REQUIRED |
+| Cell wildcards (`[1,*]`, `[*,2]`, `[*,*]`) | ✅ Stable | REQUIRED |
+| Row operations (insert/delete/append) | ✅ Stable | REQUIRED |
+| Column operations (insert/delete/append) | ✅ Stable | REQUIRED |
+| Table merge (`[r1,c1:r2,c2]/merge/`) | ✅ Stable | REQUIRED |
+| Dry-run mode (`--dry-run`, `-n`) | ✅ Stable | REQUIRED |
+| Batch processing (`-f file.sed`) | ✅ Stable | REQUIRED |
+| Markdown formatting (`**`, `*`, `` ` ``, `~~`, `__`) | ✅ Stable | RECOMMENDED |
+| Markdown headings (`#` through `######`) | ✅ Stable | RECOMMENDED |
+| Markdown lists (`-`, `1.`, nested) | ✅ Stable | RECOMMENDED |
+| Markdown blocks (rules, quotes, code) | ✅ Stable | RECOMMENDED |
+| Footnotes `[^text]` | ✅ Stable | RECOMMENDED |
+| Range references (`[A1:C3]`) | 🔮 Proposed | OPTIONAL |
+| Table cell styling | 🔮 Proposed | OPTIONAL |
+| @ mentions | 🔮 Proposed | OPTIONAL |
+
+---
 
 ## Complete Examples
 
@@ -1277,35 +1401,38 @@ Brace syntax: reset (`{0}`) | ✅ Stable | REQUIRED
 s/{{NAME}}/Acme Corp/
 s/{{DATE}}/2026-02-17/
 s/{{LOGO}}/![](https:\/\/acme.com\/logo.png){width=200}/
-s/{{SIGNATURE}}/[John Doe](mailto:john@acme.com)/
+s/{{SIGNATURE}}/{u=mailto:john@acme.com t=John Doe}/
 ```
 
-### Document Structure
+### Document Structure with Brace Syntax
 
 ```bash
 # Build a structured document
-s/^$/# Quarterly Report/
-a/Quarterly Report/## Executive Summary/
+s/^$/{h=t t=Quarterly Report}/
+a/Quarterly Report/{h=2 t=Executive Summary}/
 a/Executive Summary/The company performed well this quarter./
-a/performed well/## Financial Results/
+a/performed well/{h=2 t=Financial Results}/
 a/Financial Results/| Metric | Q3 | Q4 |\n| Revenue | $$10M | $$12M |\n| Growth | 15% | 20% |/
-s/$/\n---\n> Report generated automatically.\n[^Internal use only.]/
+s/$/\n{+}\n> Report generated automatically.\n[^Internal use only.]/
 ```
 
 ### Batch Cleanup
 
 **cleanup.sed:**
 ```sed
-# Remove drafts and TODOs
-d/DRAFT/
+# Header formatting
+s/TITLE/{h=t}/
+s/SUBTITLE/{h=s}/
+
+# Clean up
+s/DRAFT//g
 d/TODO/
 
-# Fix formatting
-s/([A-Z]{3,})/**$1**/g
-y/""/''/
+# Style important terms
+s/([A-Z]{3,})/{b t=$1}/g
 
 # Add header
-s/^/# Final Report\n/
+s/^/{h=t t=Final Report}\n/
 ```
 
 ```bash
@@ -1317,10 +1444,10 @@ gog docs sed -f cleanup.sed <doc-id>
 ```bash
 # Create and populate a pricing table
 s/{{PRICING}}/|4x3|/
-s/|1|[A1]/**Plan**/
-s/|1|[B1]/**Monthly**/
-s/|1|[C1]/**Annual**/
-s/|1|[1,*]/**&**/
+s/|1|[A1]/{b t=Plan}/
+s/|1|[B1]/{b t=Monthly}/
+s/|1|[C1]/{b t=Annual}/
+s/|1|[1,*]/{b}/
 s/|1|[A2]/Basic/
 s/|1|[A3]/Pro/
 s/|1|[A4]/Enterprise/
@@ -1333,18 +1460,38 @@ s/|1|[row:$+]//
 s/|1|[A5]/Custom/
 ```
 
+### Smart Chip Integration
+
+```bash
+# Add person chips for team mentions
+s/assigned to viz/{u=chip://person/viz@example.com t=@viz}/g
+s/deadline/{u=chip://date/2026-03-15 t=March 15, 2026}/g
+
+# Add project links
+s/project doc/{u=chip://file/DOC_ID t=Project Documentation}/g
+
+# Add status dropdown
+s/STATUS/{u=chip://dropdown/Draft|Review|Done t=Draft}/g
+```
+
+---
+
 ## Error Handling
 
 Implementations MUST handle errors gracefully:
 
-Error | Behavior
---- | ---
-Invalid regex | MUST report error, MUST NOT modify document
-Unmatched delimiter | MUST report error
-Invalid image reference | SHOULD report warning, MAY skip
-Invalid table reference | SHOULD report warning, MAY skip
-Mismatched `y///` lengths | MUST report error
-Circular reference | MUST detect and reject
+| Error | Behavior |
+|-------|----------|
+| Invalid regex | MUST report error, MUST NOT modify document |
+| Unmatched delimiter | MUST report error |
+| Invalid brace syntax | SHOULD report warning, MAY attempt recovery |
+| Invalid image reference | SHOULD report warning, MAY skip |
+| Invalid table reference | SHOULD report warning, MAY skip |
+| Mismatched `y///` lengths | MUST report error |
+| Circular reference | MUST detect and reject |
+| Invalid `chip://` scheme | SHOULD report warning, MAY skip |
+
+---
 
 ## Security Considerations
 
@@ -1352,72 +1499,27 @@ Circular reference | MUST detect and reject
 2. **Injection Prevention**: Pattern and replacement MUST be treated as data, not executable code
 3. **Resource Limits**: Implementations SHOULD limit regex complexity to prevent ReDoS attacks
 4. **Sanitization**: Implementations operating on shared documents SHOULD sanitize output
+5. **Smart Chip Validation**: Implementations SHOULD validate `chip://` URIs before insertion
 
-## Conformance Levels
+---
 
-### Level 1: Core (REQUIRED)
+## Future Considerations
 
-- Basic `s/pattern/replacement/` and `s/pattern/replacement/g`
-- Flags: `g`, `n` (nth occurrence), `m` (multiline)
-- Brace syntax: boolean flags (`{b}`, `{i}`, `{_}`, `{-}`, `{#}`, `{^}`, `{,}`, `{w}`), negation (`{!b}`, `{b=n}`)
-- Brace syntax: value flags (`{c=}`, `{z=}`, `{f=}`, `{s=}`, `{u=}`, `{t=}`, `{l=}`, `{a=}`, `{o=}`, `{n=}`, `{k=}`, `{x=}`, `{y=}`, `{p=}`, `{h=}`, `{e=}`)
-- Brace syntax: reset (`{0}`)
-- Text formatting — Markdown shortcuts: `**bold**`, `*italic*`, `` `mono` ``, `~~strike~~` (RECOMMENDED)
-- Back-references: `$1`-`$9`, `&`, `$$` escaping
-- Links: `[text](url)`, `<url>`
+> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.0.
 
-### Level 2: Extended (REQUIRED)
+### Document-Level Directives
 
-- All Level 1 features
-- Image insertion: `![alt](url)`, `!(url)`
-- Image dimensions: `{width=N}`, `{height=N}`
-- Image references: `!(n)`, `!(-n)`, `!(*)`
-- Alt-text matching: `![regex]`
-- Headings: `#` through `######`
-- Lists: `- bullet`, `1. numbered`, nested
+Page-level settings via `!^!{key=value}` syntax:
 
-### Level 3: Structural (REQUIRED)
+```bash
+!^!{margin=1in size=letter orientation=portrait}
+!^!{header=Company Name}
+!^!{footer=Page {{page}} of {{pages}}}
+```
 
-- All Level 2 features
-- Positional insert: `^$`, `^`, `$`
-- Table creation: `|RxC|`, `|RxC:header|`, pipe table syntax
-- Table deletion: `|N|`, `|-N|`, `|*|`
-- Cell references: `[A1]`, `[R,C]`, wildcards
-- Row/column operations
-- Table merge
-- Block elements: horizontal rules, blockquotes, code blocks
-- Inline elements: superscript, subscript, footnotes
+This feature is deferred pending implementation experience.
 
-### Level 4: Commands & CLI (REQUIRED)
-
-- All Level 3 features
-- Delete command: `d/pattern/`
-- Append command: `a/pattern/text/`
-- Insert command: `i/pattern/text/`
-- Transliterate command: `y/source/dest/`
-- Dry-run mode: `--dry-run` / `-n`
-- Batch processing: `-f file.sed`
-
-### Level 5: Brace Syntax Extended (REQUIRED)
-
-- All Level 4 features
-- Heading shorthands: `{h=t}`, `{h=s}`, `{h=1}`–`{h=6}`
-- Breaks: `{+}`, `{+=p}`, `{+=c}`, `{+=s}`
-- Comments: `{"=text}`
-- Bookmarks: `{@=name}`, `{u=#name}`
-- URI schemes: standard (`https:`, `mailto:`, `tel:`, etc.) and `chip://` smart chips
-- Charts: `chip://chart/` references
-
-> **Note**: Core brace syntax (parsing, boolean/value flags, reset) is included in Level 1 as REQUIRED.
-
-### Level 6: Advanced (OPTIONAL)
-
-- All Level 5 features
-- Style attributes `{key:value}` (legacy inline span syntax)
-- Document directives `!^!{}`
-- Range references (`[A1:C3]`)
-- Cell styling
-- @ mentions
+---
 
 ## References
 
@@ -1425,6 +1527,8 @@ Circular reference | MUST detect and reject
 - [CommonMark Spec](https://spec.commonmark.org/) - Markdown formatting reference
 - [POSIX Extended Regular Expressions](https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap09.html)
 - [sed(1) man page](https://www.gnu.org/software/sed/manual/sed.html) - GNU sed reference
+
+---
 
 ## Appendix A: Quick Reference Card
 
@@ -1443,29 +1547,69 @@ Circular reference | MUST detect and reject
 │   g          Global (all matches)    m     Multiline mode         │
 │   2-9        Nth occurrence only     (none) First match only      │
 ├──────────────────────────────────────────────────────────────────┤
-│ FORMATTING                                                        │
+│ BRACE SYNTAX {flags} — CANONICAL FORMATTING             ✅ STABLE │
+│                                                                   │
+│ BOOLEAN FLAGS (presence activates):                               │
+│   {b}         Bold          {i}         Italic                    │
+│   {_}         Underline     {-}         Strikethrough             │
+│   {#}         Code/mono     {^}         Superscript               │
+│   {,}         Subscript     {w}         Small caps                │
+│   {!b}        Negate bold   {b=n}       Negate (alt)              │
+│   {b i _}     Combine flags                                       │
+│                                                                   │
+│ VALUE FLAGS (key=value):                                          │
+│   {t=text}    Replacement text (default: $0 = matched text)       │
+│   {c=red}     Color         {z=yellow}  Background                │
+│   {f=Roboto}  Font          {s=14}      Size (pt)                 │
+│   {u=URL}     Link          {u=#name}   Bookmark link             │
+│   {h=1}       Heading 1     {h=t}       Title                     │
+│   {h=s}       Subtitle      {h}         Normal text               │
+│                                                                   │
+│ IMPLICIT t= RULE:                                                 │
+│   {b} expands to {b t=$0} — matched text is preserved             │
+│                                                                   │
+│ RESET:                                                            │
+│   {0}         Reset ALL     {0 b}       Reset + bold              │
+│                                                                   │
+│ BREAKS:                                                           │
+│   {+}         Horiz rule    {+=p}       Page break                │
+│   {+=c}       Column break  {+=s}       Section break             │
+│                                                                   │
+│ SUPERSCRIPT/SUBSCRIPT:                                            │
+│   {^}         Whole sup     {,}         Whole sub                 │
+│   {super=2}   Inline sup    {sub=2}     Inline sub                │
+│   {baseline=super}          {baseline=sub}                        │
+│                                                                   │
+│ COMMENTS & BOOKMARKS:                                             │
+│   {"=text}    Comment       {@=name}    Bookmark anchor           │
+│   {u=#name}   Link to bookmark                                    │
+│                                                                   │
+│ SMART CHIPS:                                                      │
+│   {u=chip://person/email}   Person chip                           │
+│   {u=chip://date/YYYY-MM-DD} Date chip                            │
+│   {u=chip://file/ID}        File chip                             │
+│   {u=chip://dropdown/a|b|c} Dropdown chip                         │
+│   {u=chip://chart/ID/0}     Chart embed                           │
+├──────────────────────────────────────────────────────────────────┤
+│ MARKDOWN SHORTCUTS (convenience layer)                            │
 │   **text**    Bold          *text*      Italic                    │
 │   ~~text~~    Strike        `text`      Monospace                 │
 │   __text__    Underline     ***text***  Bold+Italic               │
-│   {super=t}   Superscript   {sub=t}     Subscript                 │
-├──────────────────────────────────────────────────────────────────┤
-│ HEADINGS & STRUCTURE                                              │
-│   # text      Heading 1     ## text     Heading 2                 │
-│   ### text    Heading 3     ####-###### Heading 4-6               │
+│   # text      Heading 1     ## text     Heading 2, etc.           │
 │   - item      Bullet list   1. item     Numbered list             │
-│     - nested  Nested (2sp)    1. nested Nested numbered           │
 │   ---         Horiz rule    > text      Blockquote                │
 │   ```code```  Code block    [^text]     Footnote                  │
 ├──────────────────────────────────────────────────────────────────┤
 │ BACK-REFERENCES                                                   │
-│   $1-$9       Capture groups    &       Entire match              │
-│   $$          Literal $         \&      Literal &                 │
+│   $0 or &     Entire match              $1-$9       Capture groups│
+│   $$          Literal $                 \&          Literal &     │
 ├──────────────────────────────────────────────────────────────────┤
 │ LINKS & IMAGES                                                    │
 │   [text](url)               Hyperlink                             │
-│   ![alt](url)               Insert image                         │
+│   {u=url}                   Brace syntax link                     │
+│   ![alt](url)               Insert image                          │
 │   !(url)                    Insert (shorthand)                    │
-│   {width=N}                 Set width                             │
+│   {width=N} or {x=N}        Set width                             │
 │   !(1), !(-1), !(*)         Reference by position                 │
 ├──────────────────────────────────────────────────────────────────┤
 │ POSITIONAL INSERT                                                 │
@@ -1475,57 +1619,52 @@ Circular reference | MUST detect and reject
 ├──────────────────────────────────────────────────────────────────┤
 │ TABLES                                                            │
 │   |3x4|                     Create 3-row, 4-col table             │
-│   | A | B |\n| 1 | 2 |     Pipe table syntax                     │
+│   | A | B |\n| 1 | 2 |      Pipe table syntax                     │
 │   |1|, |-1|, |*|            Table reference / delete              │
-│   |1|[A1]  |1|[1,2]        Cell reference                        │
-│   |1|[1,*] |1|[*,2]        Row/column wildcard                   │
-│   |1|[row:+2] |1|[row:$+]  Insert/append row                     │
-│   |1|[col:+2] |1|[col:$+]  Insert/append column                  │
-│   |1|[r1,c1:r2,c2]/merge/  Merge cell range                      │
+│   |1|[A1]  |1|[1,2]         Cell reference                        │
+│   |1|[1,*] |1|[*,2]         Row/column wildcard                   │
+│   |1|[row:+2] |1|[row:$+]   Insert/append row                     │
+│   |1|[col:+2] |1|[col:$+]   Insert/append column                  │
+│   |1|[r1,c1:r2,c2]/merge/   Merge cell range                      │
 ├──────────────────────────────────────────────────────────────────┤
 │ CLI OPTIONS                                                       │
 │   --dry-run / -n            Preview changes (no modify)           │
 │   -f file.sed               Batch expressions from file           │
-├──────────────────────────────────────────────────────────────────┤
-│ BRACE SYNTAX {flags}                                 ✅ REQUIRED │
-│   {b}         Bold          {i}         Italic                    │
-│   {_}         Underline     {-}         Strikethrough             │
-│   {#}         Code/mono     {^}         Superscript               │
-│   {,}         Subscript     {w}         Small caps                │
-│   {!b}        Negate bold   {b=n}       Negate (alt)              │
-│   {b i _}     Combine flags                                       │
-│   {0}         Reset ALL     {0 b}       Reset + bold              │
-│   {c=red}     Color         {z=yellow}  Background                │
-│   {f=Roboto}  Font          {s=14}      Size (pt)                 │
-│   {u=URL}     Link          {u=#name}   Bookmark link             │
-│   {h=1}       Heading 1     {h=t}       Title                     │
-│   {h=s}       Subtitle      {h}         Normal text               │
-│   {+}         Horiz rule    {+=p}       Page break                │
-│   {"=text}    Comment       {@=name}    Bookmark anchor           │
-│   {u=chip://person/email}   Person chip                           │
-│   {u=chip://date/YYYY-MM-DD} Date chip                            │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+---
 
 ## Changelog
 
 ### v3.0 (2026-02-18)
-- **Brace Syntax DSL**: New `{flags}` replacement syntax as an alternative to Markdown formatting
+
+**Major: Brace Syntax as Canonical Formatting System**
+
+- **Brace Syntax promoted to canonical**: Brace syntax (`{b}`, `{c=red}`, `{h=1}`) is now the primary formatting system; Markdown shortcuts demoted to convenience layer
+- **Structural reorganization**: Commands → Flags → Brace Syntax → Back-references → Links → Images → Tables → Positional Insert → CLI → Escaping → Markdown Alternatives → Grammar → Conformance → Status → Examples
+- **Implicit `t=` rule**: Documented that `{b}` expands to `{b t=$0}` — matched text is preserved unless explicitly overridden
 - **Boolean flags**: `b` (bold), `i` (italic), `_` (underline), `-` (strike), `#` (code), `^` (sup), `,` (sub), `w` (smallcaps)
 - **Flag negation**: `!b` or `b=n` to explicitly turn off a style
 - **Value flags**: `t=` (text), `c=` (color), `z=` (background), `f=` (font), `s=` (size), `u=` (url), `l=` (leading), `a=` (align), `o=` (opacity), `n=` (indent), `k=` (kerning), `x=` (width), `y=` (height), `p=` (spacing), `h=` (heading), `e=` (effect)
 - **Heading shorthands**: `h=t` (title), `h=s` (subtitle), `h=1`–`h=6` (headings), `h` bare (reset)
+- **Superscript/subscript**: `{^}` and `{,}` as boolean flags; `{super=text}` and `{sub=text}` as inline wrappers; `{baseline=super|sub}` for whole-replacement
 - **Format reset**: `{0}` resets all formatting; bare value flags reset individual attributes
 - **Breaks**: `{+}` (horizontal rule), `{+=p}` (page), `{+=c}` (column), `{+=s}` (section)
 - **Comments**: `{"=text}` attaches annotations to matched text
 - **Bookmarks**: `{@=name}` creates anchors; `{u=#name}` links to them
 - **URI schemes**: Standard (`https:`, `mailto:`, `tel:`, `geo:`, `sms:`, `webcal:`, `file:`) and custom `chip://` schemes for Google Docs smart chips (person, date, file, place, dropdown, chart, bookmark)
 - **Charts**: Direct `chip://chart/` reference and Unix pipe composition
-- Updated ABNF grammar with full brace syntax productions
-- Updated conformance levels: Level 5 (Brace Syntax Extended) added as REQUIRED; core brace syntax moved into Level 1; Markdown formatting downgraded to RECOMMENDED; previous Level 5 renumbered to Level 6
-- Updated quick reference card with brace syntax section
+- **Removed**: Colon-based `{key:value:text}` syntax — all brace syntax uses `key=value` format
+- **Removed**: Separate "Style Attributes — PROPOSED" section — merged into Brace Syntax as STABLE
+- **Removed**: `style-attrs` ABNF production — replaced with unified `brace-expr`
+- **Deferred**: Document-level directives (`!^!{}`) moved to Future Considerations
+- Updated ABNF grammar with unified brace syntax productions
+- Updated conformance levels: Levels 1-5 are REQUIRED (Core through Smart Chips), Level 6 (Markdown) is RECOMMENDED, Level 7 (Advanced) is OPTIONAL
+- Updated quick reference card with comprehensive brace syntax section
 
 ### v2.0 (2026-02-17)
+
 - **New commands**: `d/pattern/` (delete), `a/pattern/text/` (append), `i/pattern/text/` (insert), `y/source/dest/` (transliterate)
 - **New flags**: `n` (nth occurrence, e.g. `s/foo/bar/2`), `m` (multiline mode)
 - **Heading styles**: `#` through `######` → native Heading 1–6
@@ -1541,23 +1680,20 @@ Circular reference | MUST detect and reject
 - **Whole-match backreference**: `&` for entire match, `\&` for literal ampersand
 - **Dry-run mode**: `--dry-run` / `-n` flag for previewing changes
 - **Batch processing**: `-f file.sed` for reading expressions from files
-- **PROPOSED: Style attributes**: `{font=name size=N color=#RGB}` on expressions
-- **PROPOSED: Document directives**: `!^!{margin=1in orientation=portrait}` for page settings
-- Updated conformance levels: Level 4 (Commands & CLI) now REQUIRED
-- Updated ABNF grammar with all new commands, flags, and syntax
 - Reference implementation: [gogcli](https://github.com/steipete/gogcli) `gog docs sed`
 
 ### v1.1 (2026-02-09)
+
 - **Positional insert**: Added `^$`, `^`, `$` patterns for document-level insertion
 - **Table creation**: Promoted to STABLE — `|RxC|` and `|RxC:header|` syntax
 - **Table deletion**: Added `s/|N|//`, `s/|-N|//`, `s/|*|//`
 - **Cell wildcards**: Added `[1,*]`, `[*,2]`, `[*,*]`
 - **Row operations**: Added `[row:N]`, `[row:+N]`, `[row:$+]`
 - **Column operations**: Added `[col:N]`, `[col:+N]`, `[col:$+]`
-- Updated conformance levels: Level 3 (Structural) now REQUIRED
 - Reference implementation: [gogcli](https://github.com/steipete/gogcli) `gog docs sed`
 
 ### v1.0 (2026-02-07)
+
 - Initial specification
 - Core syntax defined
 - Text formatting standardized
