@@ -1,6 +1,6 @@
 # SEDMAT: Sed-Expression-Driven Markdown Annotation & Transformation
 
-**Version**: 3.1  
+**Version**: 3.3  
 **Last Updated**: 2026-02-18  
 **Status**: Draft
 
@@ -243,6 +243,8 @@ Brace Syntax is particularly useful for expressing attributes that have no Markd
 
 4. **`{0}` resets ALL formatting** — Acts like CSS `all: unset`. MAY be combined: `{0 b}` resets everything then applies bold.
 
+5. **Inline scoping with `{flag=text}`** — Boolean flags accept optional `=text` to scope the style to just that text inline (see [Inline Scoping](#inline-scoping-flagtext--stable)).
+
 ### The Implicit `t=` Default
 
 This is the most important design rule. When you write a brace expression, the matched text (`$0`) is implicitly preserved:
@@ -297,15 +299,89 @@ s/deleted/{-}/g                # Strikethrough
 s/term/{_ i}/g                 # Underline + italic
 ```
 
-### Negation ✅ STABLE
+### Inline Scoping: `{flag=text}` ✅ STABLE
 
-Use `!` prefix or `=n` suffix to explicitly turn off a flag:
+Boolean flags accept optional `=text` for inline scoping. This allows you to apply a style to just a portion of the replacement text, rather than the entire match.
+
+#### How It Works
+
+- **`{b}` alone as entire replacement** = bold the whole match (implicit `{b=$0}`)
+- **`{b=text}` embedded in replacement** = bold just "text" inline
+
+#### Supported Flags
+
+All 8 boolean flags support inline scoping:
+
+| Flag | Inline Form | Effect |
+|------|-------------|--------|
+| `b` | `{b=text}` | Bold just "text" |
+| `i` | `{i=text}` | Italicize just "text" |
+| `_` | `{_=text}` | Underline just "text" |
+| `-` | `{-=text}` | Strikethrough just "text" |
+| `#` | `{#=text}` | Monospace just "text" |
+| `^` | `{^=text}` | Superscript just "text" |
+| `,` | `{,=text}` | Subscript just "text" |
+| `w` | `{w=text}` | Small caps just "text" |
+
+#### Examples
+
+**Chemistry (subscripts):**
+```bash
+s/H2O/H{,=2}O/g               # H₂O — subscript only the "2"
+s/CO2/CO{,=2}/g               # CO₂
+s/C6H12O6/C{,=6}H{,=12}O{,=6}/g  # Glucose formula
+```
+
+**Math (superscripts):**
+```bash
+s/x2/x{^=2}/g                 # x² — superscript only the "2"
+s/E=mc2/E=mc{^=2}/g           # E=mc²
+s/x2\+y2=z2/x{^=2}+y{^=2}=z{^=2}/g  # Pythagorean theorem
+```
+
+**Prose (emphasis):**
+```bash
+s/Warning: read this/{b=Warning}: read this/g     # Bold only "Warning"
+s/Note: important/{i=Note}: important/g           # Italic only "Note"
+s/Action Required: do it/{b=Action} {i=Required}: do it/g  # Mix inline styles
+```
+
+**Code spans:**
+```bash
+s/Run npm install to start/{#=npm install}/g      # Monospace just the command
+s/Use the --force flag/{#=--force}/g              # Monospace just the flag
+```
+
+**Strikethrough (pricing, edits):**
+```bash
+s/\$\$99 now \$\$49/{-=$$99} now $$49/g           # Strike the old price
+s/was 100 now 75/{-=was 100} now 75/g             # Strike the old text
+```
+
+#### Complex Multi-Style Inline Spans
+
+For applying multiple styles to the same inline text, use `t=`:
 
 ```bash
-s/already bold/{!b}/g     # Remove bold
-s/already bold/{b=n}/g    # Equivalent
-s/styled/{!b !i !_}/g     # Remove multiple styles
+# Bold + red for "WARNING"
+s/WARNING: danger/{b c=red t=WARNING}: danger/g
+
+# Bold + italic + underline for a term
+s/important term/{b i _ t=important term}/g
 ```
+
+**Note**: `{b=text}` is syntactic sugar for `{b t=text}` when used inline. The `t=` form is required when combining multiple styles on one span.
+
+### Negation ✅ STABLE
+
+Use `!` prefix to explicitly turn off a flag:
+
+```bash
+s/already bold/{!b}/g         # Remove bold
+s/styled/{!b !i !_}/g         # Remove multiple styles
+```
+
+> **Note**: The `=n` suffix for negation (e.g., `{b=n}`) is no longer supported as of v3.3. The `=` on boolean flags now indicates inline scoping (e.g., `{b=text}`). Use the `!` prefix for all negation.
 
 ### Combining Boolean Flags ✅ STABLE
 
@@ -402,11 +478,11 @@ s/normal paragraph/{h=0}/g    # Reset to normal text
 
 ### Superscript and Subscript ✅ STABLE
 
-SEDMAT provides boolean flags for super/subscript:
+SEDMAT provides boolean flags for super/subscript with inline scoping support.
 
 #### Boolean Flags: `{^}` and `{,}`
 
-The `{^}` (superscript) and `{,}` (subscript) flags apply to the **entire replacement text**:
+The `{^}` (superscript) and `{,}` (subscript) flags apply to the **entire replacement text** when used alone:
 
 ```bash
 s/TM/{^}/g                    # "TM" as superscript → ᵀᴹ
@@ -414,48 +490,37 @@ s/2/{,}/g                     # "2" as subscript → ₂
 s/note/{,}/g                  # "note" entirely as subscript
 ```
 
-#### Partial Super/Subscript Formatting
+#### Inline Scoping for Partial Formatting
 
-Because `{^}` and `{,}` format the entire matched text, applying super/subscript to just *part* of a word (like the "2" in "H₂O" or "E=mc²") requires one of these approaches:
+Use `{^=text}` and `{,=text}` to apply super/subscript to just part of the replacement:
 
-**1. Use Unicode Characters (Recommended)**
+```bash
+# Chemistry
+s/H2O/H{,=2}O/g               # H₂O
+s/CO2/CO{,=2}/g               # CO₂
+s/C6H12O6/C{,=6}H{,=12}O{,=6}/g  # C₆H₁₂O₆
 
-The simplest approach is to use Unicode super/subscript characters directly:
+# Math
+s/E=mc2/E=mc{^=2}/g           # E=mc²
+s/x2\+y2=z2/x{^=2}+y{^=2}=z{^=2}/g  # x²+y²=z²
+s/a2\+b2=c2/a{^=2}+b{^=2}=c{^=2}/g  # Pythagorean theorem
+
+# Ordinals
+s/1st/1{^=st}/g               # 1ˢᵗ
+s/2nd/2{^=nd}/g               # 2ⁿᵈ
+```
+
+#### Unicode Alternative
+
+For simple cases, Unicode super/subscript characters work directly:
 
 ```bash
 s/H2O/H₂O/g                   # Unicode subscript 2
 s/E=mc2/E=mc²/g               # Unicode superscript 2
-s/CO2/CO₂/g                   # Unicode subscript 2
-s/x2/x²/g                     # Unicode superscript 2
 ```
 
 Unicode superscript: ⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ  
 Unicode subscript: ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎
-
-**2. Two-Pass Approach in Batch File**
-
-For rich formatting (not just visual approximation), use multiple substitutions:
-
-```bash
-# In a batch file (transforms.sed):
-# First, mark the subscript portion
-s/H2O/H{,2}O/g                # Won't work — {,2} formats "2" but loses H and O
-
-# Instead, match and replace in stages:
-s/H2O/H◊2◊O/g                 # Step 1: Mark with placeholder
-s/◊2◊/{, t=2}/g               # Step 2: Format the placeholder
-```
-
-**3. Explicit Text Override**
-
-When matching the exact substring you want formatted:
-
-```bash
-# This works because the entire match "2" becomes subscript
-s/(?<=H)2(?=O)/{,}/g          # Lookbehind/lookahead to match just "2"
-```
-
-> **Note**: This is a known trade-off of the flag-based approach. Wrapper syntax (like `H{,2}O`) would allow inline partial formatting but was not adopted to keep the syntax simpler and avoid ambiguity with brace expressions. For most cases, Unicode characters provide an adequate solution.
 
 ### Breaks: `{+}` ✅ STABLE
 
@@ -593,6 +658,12 @@ s/note/{i c=gray s=10}/g
 s/old text/{b t=new text}/g
 s/(\w+)/{i t=[$1]}/g
 
+# Inline scoping
+s/H2O/H{,=2}O/g               # Subscript just "2"
+s/E=mc2/E=mc{^=2}/g           # Superscript just "2"
+s/Warning: stop/{b=Warning}: stop/g  # Bold just "Warning"
+s/Run npm install/{#=npm install}/g  # Monospace the command
+
 # Reset formatting
 s/messy text/{0}/g
 s/messy text/{0 b}/g          # Reset then bold
@@ -611,6 +682,8 @@ s/Chapter 1/{h=1 b}/g
 # Superscript and subscript
 s/TM/{^}/g
 s/note/{,}/g
+s/CO2/CO{,=2}/g
+s/x2/x{^=2}/g
 
 # Breaks
 s/END/{+=p}/g
@@ -1227,7 +1300,7 @@ replacement    = *( plain-text / brace-expr / format-expr / back-ref / image-exp
                    / link-expr / heading-expr / list-expr
                    / block-expr / footnote-expr )
 
-; --- Brace Syntax (v3.1) ---
+; --- Brace Syntax (v3.3) ---
 brace-expr     = "{" brace-body "}"
 brace-body     = reset-all / brace-flags
 reset-all      = "0" *( SP brace-flag )                  ; {0} or {0 b i}
@@ -1236,11 +1309,12 @@ brace-flags    = brace-flag *( SP brace-flag )
 brace-flag     = bool-flag / neg-flag / value-flag / break-flag
                  / comment-flag / bookmark-flag / table-flag / image-flag
 
-bool-flag      = "b" / "bold" / "i" / "italic" / "_" / "underline"
+bool-flag      = bool-key ["=" val-value]                ; {b} or {b=text} for inline scoping
+bool-key       = "b" / "bold" / "i" / "italic" / "_" / "underline"
                  / "-" / "strike" / "#" / "code" / "^" / "sup"
                  / "," / "sub" / "w" / "smallcaps"
 
-neg-flag       = "!" bool-flag / bool-flag "=n"          ; Negation
+neg-flag       = "!" bool-key                            ; Negation (prefix only)
 
 value-flag     = val-key "=" val-value
 val-key        = "t" / "text" / "c" / "color" / "z" / "bg"
@@ -1337,7 +1411,8 @@ positional-pat = "^$" / "^" / "$"
 
 - Basic `s/pattern/replacement/` and `s/pattern/replacement/g`
 - Flags: `g`, `n` (nth occurrence), `m` (multiline)
-- Brace syntax: boolean flags (`{b}`, `{i}`, `{_}`, `{-}`, `{#}`, `{^}`, `{,}`, `{w}`), negation (`{!b}`, `{b=n}`)
+- Brace syntax: boolean flags (`{b}`, `{i}`, `{_}`, `{-}`, `{#}`, `{^}`, `{,}`, `{w}`), negation (`{!b}`)
+- Brace syntax: inline scoping (`{b=text}`, `{^=text}`, `{,=text}`, etc.)
 - Brace syntax: value flags (`{c=}`, `{z=}`, `{f=}`, `{s=}`, `{u=}`, `{t=}`, `{l=}`, `{a=}`, `{o=}`, `{n=}`, `{k=}`, `{x=}`, `{y=}`, `{p=}`, `{h=}`, `{e=}`)
 - Brace syntax: reset (`{0}`)
 - Brace syntax: implicit `t=$0` behavior
@@ -1405,7 +1480,8 @@ positional-pat = "^$" / "^" / "$"
 | Multiline flag `m` | ✅ Stable | REQUIRED |
 | Brace syntax: basic parsing | ✅ Stable | REQUIRED |
 | Brace syntax: boolean flags (`b`, `i`, `_`, `-`, `#`, `^`, `,`, `w`) | ✅ Stable | REQUIRED |
-| Brace syntax: negation (`!b`, `b=n`) | ✅ Stable | REQUIRED |
+| Brace syntax: inline scoping (`{b=text}`, `{^=text}`, etc.) | ✅ Stable | REQUIRED |
+| Brace syntax: negation (`!b`) | ✅ Stable | REQUIRED |
 | Brace syntax: value flags (`c=`, `z=`, `f=`, `s=`, etc.) | ✅ Stable | REQUIRED |
 | Brace syntax: text flag (`t=`) with implicit `$0` | ✅ Stable | REQUIRED |
 | Brace syntax: reset (`{0}`) | ✅ Stable | REQUIRED |
@@ -1543,6 +1619,25 @@ s/project doc/{u=chip://file/DOC_ID t=Project Documentation}/g
 s/STATUS/{u=chip://dropdown/Draft|Review|Done t=Draft}/g
 ```
 
+### Scientific Notation with Inline Scoping
+
+```bash
+# Chemistry formulas
+s/H2O/H{,=2}O/g
+s/CO2/CO{,=2}/g
+s/H2SO4/H{,=2}SO{,=4}/g
+s/NaHCO3/NaHCO{,=3}/g
+
+# Physics equations
+s/E=mc2/E=mc{^=2}/g
+s/F=ma/F=ma/g
+s/v2=u2\+2as/v{^=2}=u{^=2}+2as/g
+
+# Math expressions
+s/x2\+y2=r2/x{^=2}+y{^=2}=r{^=2}/g
+s/an=a1\+\(n-1\)d/a{,=n}=a{,=1}+(n-1)d/g
+```
+
 ---
 
 ## Error Handling
@@ -1574,7 +1669,7 @@ Implementations MUST handle errors gracefully:
 
 ## Future Considerations
 
-> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.1.
+> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.3.
 
 ### Document-Level Directives
 
@@ -1603,7 +1698,7 @@ This feature is deferred pending implementation experience.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    SEDMAT 3.1 Quick Reference                     │
+│                    SEDMAT 3.3 Quick Reference                     │
 ├──────────────────────────────────────────────────────────────────┤
 │ COMMANDS                                                          │
 │   s/pattern/replacement/[flags]  Substitute                       │
@@ -1623,8 +1718,12 @@ This feature is deferred pending implementation experience.
 │   {_}         Underline     {-}         Strikethrough             │
 │   {#}         Code/mono     {^}         Superscript               │
 │   {,}         Subscript     {w}         Small caps                │
-│   {!b}        Negate bold   {b=n}       Negate (alt)              │
-│   {b i _}     Combine flags                                       │
+│   {!b}        Negate bold   {b i _}     Combine flags             │
+│                                                                   │
+│ INLINE SCOPING (apply style to part of replacement):              │
+│   {b=text}    Bold just "text"         {i=text}   Italic "text"   │
+│   {^=text}    Superscript "text"       {,=text}   Subscript "text"│
+│   H{,=2}O → H₂O    E=mc{^=2} → E=mc²   {b=Warning}: msg           │
 │                                                                   │
 │ VALUE FLAGS (key=value):                                          │
 │   {t=text}    Replacement text (default: $0 = matched text)       │
@@ -1647,7 +1746,8 @@ This feature is deferred pending implementation experience.
 │                                                                   │
 │ SUPERSCRIPT/SUBSCRIPT:                                            │
 │   {^}         Whole sup     {,}         Whole sub                 │
-│   Note: Use Unicode (H₂O, E=mc²) for partial formatting           │
+│   {^=text}    Sup inline    {,=text}    Sub inline                │
+│   H{,=2}O    x{^=2}+y{^=2}  CO{,=2}    E=mc{^=2}                  │
 │                                                                   │
 │ COMMENTS & BOOKMARKS:                                             │
 │   {"=text}    Comment       {@=name}    Bookmark anchor           │
@@ -1712,6 +1812,24 @@ This feature is deferred pending implementation experience.
 
 ## Changelog
 
+### v3.3 (2026-02-18)
+
+**Major: Inline Scoping for Boolean Flags**
+
+- **Added inline scoping**: Boolean flags now accept optional `=text` for inline scoping (e.g., `{b=text}`, `{^=text}`, `{,=text}`)
+  - `{b}` alone = bold the whole match (implicit `{b=$0}`)
+  - `{b=text}` embedded = bold just "text" inline
+  - Works for all 8 boolean flags: `b`, `i`, `_`, `-`, `#`, `^`, `,`, `w`
+  - Enables clean partial formatting: `H{,=2}O`, `E=mc{^=2}`, `{b=Warning}: read this`
+  - `{b=text}` is syntactic sugar for `{b t=text}` in inline context
+- **Deprecated `=n` negation**: The `=n` suffix for negation (e.g., `{b=n}`) is no longer supported since `=` on boolean flags now indicates inline scoping. Use `!` prefix for all negation (`{!b}`)
+- **Simplified superscript/subscript documentation**: Replaced awkward two-pass/placeholder examples with clean inline scoping patterns
+- **Updated ABNF**: `bool-flag` now optionally accepts `= val-value`; removed `=n` from `neg-flag`
+- **Updated Design Rules**: Added rule 5 about inline scoping context
+- **Updated Quick Reference Card**: Added inline scoping section with examples
+- **Updated Conformance Levels**: Level 1 now requires inline scoping support
+- **Added scientific notation examples**: Chemistry (H₂O, CO₂) and math (E=mc², x²+y²=z²)
+
 ### v3.1 (2026-02-18)
 
 **Major: Cleanup and Simplification**
@@ -1735,7 +1853,7 @@ This feature is deferred pending implementation experience.
 - **Structural reorganization**: Commands → Flags → Brace Syntax → Back-references → Links → Images → Tables → Positional Insert → CLI → Escaping → Markdown Alternatives → Grammar → Conformance → Status → Examples
 - **Implicit `t=` rule**: Documented that `{b}` expands to `{b t=$0}` — matched text is preserved unless explicitly overridden
 - **Boolean flags**: `b` (bold), `i` (italic), `_` (underline), `-` (strike), `#` (code), `^` (sup), `,` (sub), `w` (smallcaps)
-- **Flag negation**: `!b` or `b=n` to explicitly turn off a style
+- **Flag negation**: `!b` to explicitly turn off a style
 - **Value flags**: `t=` (text), `c=` (color), `z=` (background), `f=` (font), `s=` (size), `u=` (url), `l=` (leading), `a=` (align), `o=` (opacity), `n=` (indent), `k=` (kerning), `x=` (width), `y=` (height), `p=` (spacing), `h=` (heading), `e=` (effect)
 - **Heading shorthands**: `h=t` (title), `h=s` (subtitle), `h=1`–`h=6` (headings), `h` bare (reset)
 - **Format reset**: `{0}` resets all formatting; bare value flags reset individual attributes
