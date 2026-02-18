@@ -61,6 +61,7 @@ y/aeiou/AEIOU/
 ### Expression Anatomy
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222', 'clusterBkg': '#1a1a1a', 'clusterBorder': '#444444' }}}%%
 graph LR
     subgraph "SEDMAT Expression"
         CMD["s|d|a|i|y"] --> SEP1["/"]
@@ -71,15 +72,16 @@ graph LR
         SEP3 --> FLAGS["flags"]
     end
     
-    style CMD fill:#e1f5e1
-    style PAT fill:#fff4e1
-    style REP fill:#e1e8f5
-    style FLAGS fill:#f5e1e8
+    style CMD fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
+    style PAT fill:#4a3a1a,color:#ffffff,stroke:#7a5a2a
+    style REP fill:#1a2a4a,color:#ffffff,stroke:#2a4a7a
+    style FLAGS fill:#4a1a3a,color:#ffffff,stroke:#7a2a5a
 ```
 
 ### Processing Model
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
 flowchart TB
     INPUT[Input Document] --> PARSE[Parse Expression]
     PARSE --> CMD{Command<br/>Type?}
@@ -95,8 +97,8 @@ flowchart TB
     INSERT --> OUTPUT
     XLAT --> OUTPUT
     
-    style NATIVE fill:#90ee90
-    style WALK fill:#fff4e1
+    style NATIVE fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
+    style WALK fill:#4a3a1a,color:#ffffff,stroke:#7a5a2a
 ```
 
 SEDMAT processors SHOULD detect plain-text replacements and use native regex APIs for optimal performance.
@@ -249,14 +251,15 @@ s/urgent/***__urgent__***/
 **Processing Order:**
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
 graph LR
     TEXT[text] --> U["__underline__"]
     U --> B["**bold**"]
     B --> I["*italic*"]
     I --> FINAL["***__text__***"]
     
-    style TEXT fill:#f0f0f0
-    style FINAL fill:#e1f5e1
+    style TEXT fill:#2a2a2a,color:#ffffff,stroke:#555555
+    style FINAL fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
 ```
 
 Implementations MUST process nesting from innermost to outermost.
