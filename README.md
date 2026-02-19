@@ -433,6 +433,21 @@ s/highlight/{z=yellow}/g       # Yellow background
 s/heading/{f=Georgia s=18}/g
 s/caption/{s=9 i}/g
 
+# Text alignment
+s/Title/{a=center h=t}/g       # Centered title
+s/disclaimer/{a=right s=8}/g   # Right-aligned small text
+s/body text/{a=justify}/g      # Justified paragraph
+
+# Indent levels
+s/sub-point/{n=1}/g            # Indent level 1
+s/sub-sub-point/{n=2}/g        # Indent level 2
+s/outdent/{n=0}/g              # Reset to no indent
+
+# Line spacing
+s/dense text/{l=1}/g           # Single spacing
+s/readable/{l=1.5}/g           # 1.5 spacing
+s/double spaced/{l=2}/g        # Double spacing
+
 # Combined
 s/CRITICAL/{b c=red z=yellow s=14}/g
 ```
