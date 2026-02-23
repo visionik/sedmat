@@ -1,4 +1,4 @@
-# SEDMAT: Sed-Expression-Driven Markdown Annotation & Transformation
+# SEDMAT: Sed-Expression-Driven Mark(up|down) Annotation & Transformation
 
 **Version**: 3.5  
 **Last Updated**: 2026-02-18  
