@@ -6,9 +6,11 @@
 
 ## Abstract
 
-SEDMAT (Sed-Expression-Driven Markdown Annotation & Transformation) is a specification for document manipulation using sed-inspired syntax combined with a compact brace-based formatting DSL (`{flags}`). SEDMAT provides a portable, human-readable DSL for batch text transformations, formatting operations, and structural modifications targeting rich document formats (Google Docs, Word, etc.).
+SEDMAT (Sed-Expression-Driven Markdown Annotation & Transformation) is a specification for rich "WYSIWYG" formatted document manipulation using sed-inspired syntax combined with a compact brace-based formatting DSL (`{flags}`). SEDMAT provides a portable, human-readable DSL for batch text transformations, formatting operations, and structural modifications targeting rich document formats (Google Docs, Word, Slides, Powerpoint, Sheets, Exceletc.).
 
-**Brace Syntax** is the canonical formatting system. Markdown-style formatting (`**bold**`, `*italic*`) is supported as a convenience layer for familiarity but is not the primary syntax.
+SED is a powerful syntax that is often used by agentic systems to modify source code and other text files.  SEDMAT extends that ASCII editing ability into richly formatted documents of any type.
+
+The SEDMAT **Brace Syntax** is the canonical formatting system. Markdown-style formatting (`**bold**`, `*italic*`) is supported as a convenience layer for familiarity but is not the primary syntax.
 
 ## Introduction
 
