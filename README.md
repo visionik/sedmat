@@ -1,12 +1,12 @@
 # SEDMAT: Sed-Expression-Driven Mark(up|down) Annotation & Transformation
 
-**Version**: 3.5  
-**Last Updated**: 2026-02-18  
+**Version**: 3.6  
+**Last Updated**: 2026-11-23  
 **Status**: Draft
 
 ## Abstract
 
-SEDMAT (Sed-Expression-Driven Markdown Annotation & Transformation) is a specification for rich "WYSIWYG" formatted document manipulation using sed-inspired syntax combined with a compact brace-based formatting DSL (`{flags}`). SEDMAT provides a portable, human-readable DSL for batch text transformations, formatting operations, and structural modifications targeting rich document formats (Google Docs, Word, Slides, Powerpoint, Sheets, Exceletc.).
+SEDMAT (Sed-Expression-Driven Markdown Annotation & Transformation) is a specification for rich "WYSIWYG" formatted document manipulation using sed-inspired syntax combined with a compact brace-based formatting DSL (`{flags}`). SEDMAT provides a portable, human-readable DSL for batch text transformations, formatting operations, and structural modifications targeting rich document formats (Google Docs, Word, Slides, PowerPoint, Sheets, Excel, etc.).
 
 SED is a powerful syntax that is often used by agentic systems to modify source code and other text files.  SEDMAT extends that ASCII editing ability into richly formatted documents of any type.
 
@@ -16,13 +16,14 @@ The SEDMAT **Brace Syntax** is the canonical formatting system. Markdown-style f
 
 SEDMAT enables:
 
-- **Familiar Syntax**: sed-style `s/pattern/replacement/flags` expressions
+- **Familiar Syntax**: sed-style `[address]s/pattern/replacement/flags` expressions
+- **Paragraph Addressing**: Classic 1-based `sed` element addressing (`N`, `N,M`, `$`, `N,$`) with document introspection (`structure`, `cat -N`)
 - **Rich Formatting**: Brace syntax (`{b}`, `{c=red}`, `{h=1}`) as the canonical format
 - **Markdown Shortcuts**: Optional convenience layer (`**bold**`, `*italic*`) for those familiar with Markdown
 - **Structural Operations**: Headings, lists, tables, horizontal rules, blockquotes, code blocks
-- **Extended sed Commands**: `d/` (delete), `a/` (append), `i/` (insert), `y/` (transliterate)
-- **Regex Power**: Full Extended Regular Expression (ERE) support with back-references
-- **Batch Processing**: Transform multiple elements via pipelines or `-f` batch files
+- **Extended sed Commands**: `d` (delete), `a` (append), `i` (insert), `y` (transliterate)
+- **Regex Power**: Full Extended Regular Expression (ERE) support with back-references and `i`/`m`/`g`/`N` flags
+- **Batch Processing**: Transform multiple elements via pipelines, `-e` expressions, or `-f` batch files
 - **Dry-Run Mode**: Preview changes before applying
 
 ## Conventions
@@ -42,7 +43,7 @@ s/pattern/replacement/
 - Replaces with `replacement`
 - Affects first match only
 
-### With Brace Formatting
+### With Brace Formatting & Paragraph Addressing
 
 ```bash
 # Make the first occurrence of warning bold
@@ -66,6 +67,11 @@ s/Google/{u=https://google.com}/
 # Delete paragraphs containing "DRAFT"
 d/DRAFT/
 
+# Address specific paragraphs (1-based, classic sed style)
+5d                        # Delete paragraph 5
+3,7s/old/new/g            # Substitute only within paragraphs 3 through 7
+$a/Appended at the end/   # Append after the last paragraph
+
 # Transliterate vowels
 y/aeiou/AEIOU/
 ```
@@ -78,7 +84,8 @@ y/aeiou/AEIOU/
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222', 'clusterBkg': '#1a1a1a', 'clusterBorder': '#444444' }}}%%
 graph LR
     subgraph "SEDMAT Expression"
-        CMD["s|d|a|i|y"] --> SEP1["/"]
+        ADDR["[address]"] --> CMD["s|d|a|i|y"]
+        CMD --> SEP1["/"]
         SEP1 --> PAT["pattern"]
         PAT --> SEP2["/"]
         SEP2 --> REP["replacement"]
@@ -86,6 +93,7 @@ graph LR
         SEP3 --> FLAGS["flags"]
     end
     
+    style ADDR fill:#2a3a4a,color:#ffffff,stroke:#4a6a8a
     style CMD fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
     style PAT fill:#4a3a1a,color:#ffffff,stroke:#7a5a2a
     style REP fill:#1a2a4a,color:#ffffff,stroke:#2a4a7a
@@ -98,9 +106,12 @@ graph LR
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#333333', 'primaryTextColor': '#ffffff', 'primaryBorderColor': '#555555', 'lineColor': '#aaaaaa', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#222222', 'background': '#111111', 'edgeLabelBackground': '#222222' }}}%%
 flowchart TB
     INPUT[Input Document] --> PARSE[Parse Expression]
-    PARSE --> CMD{Command<br/>Type?}
+    PARSE --> ADDR{Has Address<br/>Prefix?}
+    ADDR -->|Yes| RESOLVE[Resolve 1-Based<br/>Element Range]
+    ADDR -->|No| CMD{Command<br/>Type?}
+    RESOLVE --> CMD
     CMD -->|s| HASFORMAT{Contains<br/>Formatting?}
-    CMD -->|d| DELETE[Delete Matching<br/>Paragraphs]
+    CMD -->|d| DELETE[Delete Targeted<br/>Paragraphs]
     CMD -->|a/i| INSERT[Insert/Append<br/>Paragraphs]
     CMD -->|y| XLAT[Transliterate<br/>Characters]
     HASFORMAT -->|No| NATIVE[Native Regex API<br/>Fast Path]
@@ -112,6 +123,7 @@ flowchart TB
     INSERT --> OUTPUT
     XLAT --> OUTPUT
     
+    style RESOLVE fill:#2a3a4a,color:#ffffff,stroke:#4a6a8a
     style NATIVE fill:#1a4a1a,color:#ffffff,stroke:#2a7a2a
     style WALK fill:#4a3a1a,color:#ffffff,stroke:#7a5a2a
     style BRACEPARSE fill:#3a2a4a,color:#ffffff,stroke:#5a4a7a
@@ -123,42 +135,58 @@ SEDMAT processors SHOULD detect plain-text replacements and use native regex API
 
 ## Commands
 
-### Substitute: `s/pattern/replacement/[flags]` ✅ STABLE
+All mutating commands (`s`, `d`, `a`, `i`) MAY be preceded by an optional 1-based [Paragraph Address](#paragraph-addressing--stable) (`N`, `N,M`, `$`, `N,$`) to restrict the operation to specific document elements.
 
-The core command. Matches `pattern` in the document and replaces with `replacement`.
+### Substitute: `[address]s/pattern/replacement/[flags]` ✅ STABLE
 
-```bash
-s/old/new/      # Replace first match
-s/old/new/g     # Replace all matches
-s/old/new/2     # Replace 2nd match only
-```
-
-### Delete: `d/pattern/` ✅ STABLE
-
-Deletes entire paragraphs matching `pattern`.
+The core command. Matches `pattern` in the document (or within the addressed elements) and replaces with `replacement`.
 
 ```bash
-d/DRAFT/        # Delete paragraphs containing "DRAFT"
-d/^$/           # Delete empty paragraphs
-d/TODO.*/       # Delete paragraphs matching regex
+s/old/new/          # Replace first match
+s/old/new/g         # Replace all matches
+s/old/new/i         # Case-insensitive first match
+s/old/new/gi        # Case-insensitive, all matches
+s/old/new/2         # Replace 2nd match only
+5s/.*/New text/     # Replace all text in paragraph 5
+3,7s/old/new/g      # Replace all matches within paragraphs 3 through 7
 ```
 
-### Append: `a/pattern/text/` ✅ STABLE
+### Delete: `d/pattern/[flags]` and `[address]d` ✅ STABLE
 
-Appends `text` as a new paragraph after each paragraph matching `pattern`.
+Deletes entire paragraphs matching `pattern`, or deletes elements selected by a [Paragraph Address](#paragraph-addressing--stable). When both an address and a pattern are supplied (`N,Md/pattern/`), only addressed elements matching `pattern` are deleted.
+
+```bash
+d/DRAFT/            # Delete paragraphs containing "DRAFT"
+d/draft/i           # Case-insensitive delete
+d/^$/               # Delete empty paragraphs
+d/TODO.*/           # Delete paragraphs matching regex
+5d                  # Delete element 5
+3,7d                # Delete elements 3 through 7
+$d                  # Delete last element
+3,$d                # Delete from element 3 to the end
+3,7d/DRAFT/         # Delete elements in 3..7 containing "DRAFT"
+```
+
+### Append: `a/pattern/text/[flags]` and `[address]a/text/` ✅ STABLE
+
+Appends `text` as a new paragraph after each paragraph matching `pattern`, or immediately after each addressed element. When an address prefix is present, no search pattern is required (`[address]a/text/`).
 
 ```bash
 a/Introduction/This text appears after the Introduction paragraph/
 a/^Chapter/--- end of chapter ---/
+5a/New paragraph after element 5/
+$a/Appended at the end of the document/
 ```
 
-### Insert: `i/pattern/text/` ✅ STABLE
+### Insert: `i/pattern/text/[flags]` and `[address]i/text/` ✅ STABLE
 
-Inserts `text` as a new paragraph before each paragraph matching `pattern`.
+Inserts `text` as a new paragraph before each paragraph matching `pattern`, or immediately before each addressed element. When an address prefix is present, no search pattern is required (`[address]i/text/`).
 
 ```bash
 i/Conclusion/This text appears before the Conclusion paragraph/
 i/^Chapter/=== start of chapter ===/
+3i/Inserted before element 3/
+1i/{h=t}Document Title/
 ```
 
 ### Transliterate: `y/source/dest/` ✅ STABLE
@@ -173,27 +201,116 @@ y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/  # Lowercase
 
 ---
 
+## Paragraph Addressing ✅ STABLE
+
+> **Status**: ✅ STABLE (added in v3.6) — Adopts classic `sed` 1-based line addressing for top-level rich document elements.
+
+Rich documents are composed of ordered top-level structural elements (paragraphs, tables, and tables of contents). Classic `sed`-style address prefixes allow targeting specific elements deterministically by 1-based ordinal index — avoiding fragile substring matching when editing repeating headings, boilerplate, or long documents.
+
+### Addressable Elements
+
+Implementations MUST assign sequential **1-based** indices (`1`, `2`, ..., `N`) in document order across top-level body elements of the active document (or active tab/section):
+
+| Element Kind | Description |
+|--------------|-------------|
+| `paragraph` | Body paragraphs, headings, list items, blockquotes, horizontal rules, code lines |
+| `table` | Top-level tables (counted as a single addressable top-level element) |
+| `toc` | Table of contents blocks |
+
+### Address Syntax
+
+| Address | Meaning |
+|---------|---------|
+| `N` | Element number `N` (1-based positive integer) |
+| `N,M` | Inclusive range from element `N` through element `M` (`M >= N`) |
+| `$` | Last addressable element in the document (or active tab/section) |
+| `N,$` | Inclusive range from element `N` through the last element |
+
+### Addressed Command Forms
+
+| Form | Semantics |
+|------|-----------|
+| `Nd`, `N,Md`, `$d`, `N,$d` | Unconditionally delete addressed element(s) |
+| `N,Md/pattern/[flags]` | Delete addressed elements whose text matches `pattern` |
+| `Ns/pat/rep/[flags]`, `N,Ms/pat/rep/[flags]` | Substitute only within addressed element(s) |
+| `Na/text/`, `N,Ma/text/`, `$a/text/` | Append new paragraph(s) after each addressed element (no search pattern) |
+| `Ni/text/`, `N,Mi/text/`, `$i/text/` | Insert new paragraph(s) before each addressed element (no search pattern) |
+
+Literal `\n` escapes inside addressed `a/text/` and `i/text/` payloads MUST be expanded to paragraph breaks.
+
+### Validation Rules
+
+Implementations MUST enforce the following address validation errors before mutating the document:
+
+1. **Address without command**: An address prefix with no following command (e.g., `5`, `1,3`, `$`) MUST fail with a parse error.
+2. **`$` as range start**: `$,N` and `$,$` MUST fail with a parse error (use `N,$` instead).
+3. **Malformed range**: A trailing comma (`3,`) or non-numeric / `< 1` range bound (`0`, `3,0`, `3,foo`) MUST fail with a parse error.
+4. **Reversed range**: `N,M` where `M < N` MUST fail with an error.
+5. **Empty document**: Resolving any address against a document with zero addressable elements MUST fail with an error.
+6. **Out-of-range index**: Resolving `start > element_count` or `end > element_count` MUST fail with an out-of-range error reporting the actual element count.
+
+### Terminal Deletion Semantics
+
+Many rich document models (such as Google Docs and OOXML body segments) require a non-deletable trailing paragraph sentinel / final newline. When planning addressed deletions that include the final element:
+
+- **Contiguous terminal range (`N,$d` where `N < last`)**: Implementations SHOULD plan a single contiguous deletion ending immediately before the final element's mandatory trailing newline so the document remains structurally valid.
+- **Single final element (`$d` where `last > 1`)**: Implementations MUST remove from the preceding element's trailing newline through immediately before the final newline (so no stray empty paragraph is left behind).
+- **Sole element (`1d` / `$d` when `last == 1`)**: Implementations MUST clear the element's text content while preserving the required empty document paragraph.
+
+### Document Introspection Conventions (RECOMMENDED)
+
+Because deterministic paragraph addressing requires knowing element numbers, CLI tools and agent integrations SHOULD provide read-only introspection views using the exact same 1-based numbering as SEDMAT addressing:
+
+- **Structure listing (`structure`)**: Displays each element's 1-based index, kind (`paragraph`, `table`, `toc`), style/heading level, and a short text preview.
+- **Numbered output (`cat -N`)**: Outputs document text prefixed with `[1]`, `[2]`, `[3]`, ... per addressable element.
+
+```bash
+# Discover element numbers before editing
+gog docs structure <DOC_ID>
+gog docs cat <DOC_ID> -N
+
+# Apply deterministic addressed edits
+gog docs sed <DOC_ID> '5d'
+gog docs sed <DOC_ID> '3,7s/draft/final/gi'
+gog docs sed <DOC_ID> '$a/Appendix A/'
+```
+
+### Multi-Tab / Section Scoping (`--tab`)
+
+For multi-tab or multi-section documents (e.g., Google Docs Tabs, Word sections, Slides, Sheets), CLI implementations SHOULD support `--tab <title-or-id>` to scope both introspection (`structure`, `cat -N`) and addressed SEDMAT expressions to the selected tab or section:
+
+```bash
+gog docs structure <DOC_ID> --tab "Summary"
+gog docs sed <DOC_ID> --tab "Summary" '3d'
+```
+
+---
+
 ## Flags and Delimiters
 
 ### Command Flags ✅ STABLE
 
-Flag | Meaning | Status
---- | --- | ---
-`g` | Replace ALL matches | ✅ STABLE
-`2`..`9` | Replace Nth occurrence only | ✅ STABLE
-`m` | Multiline mode (`^`/`$` match line boundaries) | ✅ STABLE
-*(none)* | Replace first match only | ✅ STABLE
+Flag | Meaning | Applies To | Status
+--- | --- | --- | ---
+`g` | Replace ALL matches | `s` | ✅ STABLE
+`i` | Case-insensitive regex matching (`(?i)`) | `s`, `d`, `a`, `i` | ✅ STABLE
+`m` | Multiline mode (`^`/`$` match line boundaries, `(?m)`) | `s`, `d`, `a`, `i` | ✅ STABLE
+`N` (`1`..`N`) | Replace Nth occurrence only | `s` | ✅ STABLE
+*(none)* | Replace first match only | `s` | ✅ STABLE
 
-**Flag combinations**: The `n` (nth occurrence) flag is a digit appended after the delimiter. The `g` and `m` flags MAY be combined: `s/foo/bar/gm`.
+**Flag combinations**: Flags MAY be combined in any order (e.g., `s/foo/bar/gi`, `s/^line/LINE/gim`, `d/draft/i`). Positive integers select the Nth occurrence (`s/foo/bar/2`, `s/foo/bar/10`).
 
 ```bash
-s/foo/bar/g     # All occurrences
-s/foo/bar/2     # 2nd occurrence only
-s/^line/LINE/m  # Multiline: ^ matches start of each line
-s/^line/LINE/gm # Multiline + global
+s/foo/bar/g      # All occurrences
+s/foo/bar/i      # Case-insensitive (first match)
+s/foo/bar/gi     # Case-insensitive + global
+s/foo/bar/2      # 2nd occurrence only
+s/^line/LINE/m   # Multiline: ^ matches start of each line
+s/^line/LINE/gm  # Multiline + global
+d/draft/i        # Delete paragraphs matching "draft" (any case)
 ```
 
-**Conformance**: Implementations MUST support `g`, `n` (nth occurrence), and `m` (multiline) flags.
+**Conformance**: Implementations MUST support `g`, `i` (case-insensitive), `m` (multiline), and `N` (nth occurrence) flags.
 
 ### Delimiters ✅ STABLE
 
@@ -249,9 +366,11 @@ Brace Syntax is particularly useful for expressing attributes that have no Markd
 
 6. **Structural flags target containers** — Most flags target text ranges, but structural flags (`cols=`, `+=`, and future page-level properties) target the containing section or document. The matched text acts as a locator to identify which section to modify. Both text flags and structural flags coexist in the same `{}` group — implementations apply each to its appropriate scope.
 
-### The Implicit `t=` Default
+7. **Flexible brace placement** — When paired with literal replacement text outside the braces, a brace block MAY be placed **before** the text (`{b}hello`, preferred), **after** the text (`hello{b}`), or **surrounding** the text (`{c=red}warning{b}`, merging both brace groups onto the text). Standalone braces (`{b}`) apply to `$0` via the implicit `t=$0` rule, and multiple brace blocks interleaved with text produce independent styled spans.
 
-This is the most important design rule. When you write a brace expression, the matched text (`$0`) is implicitly preserved:
+### Brace Placement & The Implicit `t=` Default
+
+This is the most important design rule. When you write a standalone brace expression, the matched text (`$0`) is implicitly preserved:
 
 ```bash
 # These are equivalent:
@@ -261,14 +380,18 @@ s/warning/{b t=$0}/g
 # The replacement is "warning" with bold applied
 ```
 
-If you want to replace the text, use `t=`:
+When replacing the text itself, you MAY either use `t=` inside the braces or place the brace block adjacent to the replacement text:
 
 ```bash
-# Replace "error" with "ERROR" and make it bold
+# Replace "error" with "ERROR" and make it bold (all equivalent)
 s/error/{b t=ERROR}/g
+s/error/{b}ERROR/g          # Braces before text (canonical)
+s/error/ERROR{b}/g          # Braces after text
+s/error/{c=red}ERROR{b}/g   # Surrounding braces merge flags (red + bold)
 
 # Replace with back-reference
-s/(\w+)/{b t=[$1]}/g   # "hello" → "[hello]" in bold
+s/(\w+)/{b t=[$1]}/g        # "hello" → "[hello]" in bold
+s/(\w+)/{b}[$1]/g           # Equivalent
 ```
 
 If you omit brace syntax entirely, you're doing a plain text replacement:
@@ -1254,18 +1377,31 @@ Positional insert MUST support all replacement features (formatting, images, tab
 The `--dry-run` (or `-n`) flag shows what changes would be made without modifying the document:
 
 ```bash
-gog docs sed --dry-run 's/foo/bar/g' <doc-id>
-gog docs sed -n 's/old/new/' <doc-id>
+gog docs sed <doc-id> 's/foo/bar/g' --dry-run
+gog docs sed <doc-id> 's/old/new/' -n
 ```
 
 Implementations MUST display the matches and proposed changes, and MUST NOT modify the document.
 
-### Batch Processing
+### Multiple Inline Expressions (`-e`)
 
-The `-f` flag reads expressions from a file (one per line). Lines starting with `#` are comments:
+The `-e` (or `--expressions`) flag MAY be repeated to execute multiple expressions sequentially in a single invocation:
 
 ```bash
-gog docs sed -f transforms.sed <doc-id>
+gog docs sed <doc-id> -e '1s/.*/{h=t}Quarterly Report/' -e 's/DRAFT/{b c=red}FINAL/g'
+```
+
+### Batch Processing (`-f`) and Stdin Piping
+
+The `-f` flag reads expressions from a file (one per line). Lines starting with `#` are comments. When no expression argument or `-f` file is supplied, CLI implementations SHOULD read expressions from `stdin` (supporting shell pipes and heredocs):
+
+```bash
+gog docs sed <doc-id> -f transforms.sed
+echo 's/foo/{b}bar/' | gog docs sed <doc-id>
+gog docs sed <doc-id> <<'EOF'
+s/TITLE/{h=t}My Report/
+s/DRAFT/{b c=green}FINAL/
+EOF
 ```
 
 **transforms.sed:**
@@ -1280,6 +1416,15 @@ d/TODO/
 
 # Add footer
 s/$/\nGenerated automatically/
+```
+
+### Paste Mode (`-p`) and Tab Scoping (`--tab`)
+
+- **`-p` (paste mode)**: Inserts raw file or stdin content directly as seed text (useful in seed-then-format workflows).
+- **`--tab <title-or-id>`**: Scopes addressing, introspection, and edits to a specific document tab or section.
+
+```bash
+gog docs sed <doc-id> --tab "Summary" '3,5s/old/new/g'
 ```
 
 ---
@@ -1485,13 +1630,22 @@ Implementations MUST process nesting from innermost to outermost.
 sedmat-line    = sedmat-expr / comment
 comment        = "#" *VCHAR
 
+; --- Addresses (v3.6) ---
+address        = addr-single / addr-range
+addr-single    = pos-int / "$"
+addr-range     = pos-int "," (pos-int / "$")             ; "$" MUST NOT be range start; end >= start
+pos-int        = %x31-39 *DIGIT                          ; 1-based positive integer
+
 ; --- Commands ---
 sedmat-expr    = subst-expr / delete-expr / append-expr / insert-expr / xlat-expr
 
-subst-expr     = "s" delimiter pattern delimiter replacement delimiter [flags]
-delete-expr    = "d" delimiter pattern delimiter
-append-expr    = "a" delimiter pattern delimiter text delimiter
-insert-expr    = "i" delimiter pattern delimiter text delimiter
+subst-expr     = [address] "s" delimiter pattern delimiter replacement delimiter [flags]
+delete-expr    = address "d"
+               / [address] "d" delimiter pattern delimiter [regex-flags]
+append-expr    = address "a" delimiter text delimiter
+               / "a" delimiter pattern delimiter text delimiter [regex-flags]
+insert-expr    = address "i" delimiter text delimiter
+               / "i" delimiter pattern delimiter text delimiter [regex-flags]
 xlat-expr      = "y" delimiter source-chars delimiter dest-chars delimiter
 
 delimiter      = "/" / "#" / "|" / %x21-2E / %x3A-40 / %x5B-60 / %x7B-7E
@@ -1502,14 +1656,15 @@ source-chars   = 1*CHAR
 dest-chars     = 1*CHAR          ; Must be same length as source-chars
 
 ; --- Flags ---
-flags          = *( "g" / DIGIT / "m" )
+flags          = *( "g" / "i" / "m" / pos-int )
+regex-flags    = *( "i" / "m" )
 
 ; --- Replacement ---
 replacement    = *( plain-text / brace-expr / format-expr / back-ref / image-expr
                    / link-expr / heading-expr / list-expr
                    / block-expr / footnote-expr )
 
-; --- Brace Syntax (v3.5) ---
+; --- Brace Syntax (v3.6) ---
 brace-expr     = "{" brace-body "}"
 brace-body     = reset-all / brace-flags
 reset-all      = "0" *( SP brace-flag )                  ; {0} or {0 b i}
@@ -1631,9 +1786,9 @@ positional-pat = "^$" / "^" / "$"
 ### Level 1: Core (REQUIRED)
 
 - Basic `s/pattern/replacement/` and `s/pattern/replacement/g`
-- Flags: `g`, `n` (nth occurrence), `m` (multiline)
+- Flags: `g`, `i` (case-insensitive), `m` (multiline), `N` (nth occurrence)
 - Brace syntax: boolean flags (`{b}`, `{i}`, `{_}`, `{-}`, `{#}`, `{^}`, `{,}`, `{w}`), negation (`{!b}`)
-- Brace syntax: inline scoping (`{b=text}`, `{^=text}`, `{,=text}`, etc.)
+- Brace syntax: flexible placement (`{b}text`, `text{b}`, `{c=red}text{b}`) and inline scoping (`{b=text}`, `{^=text}`, `{,=text}`, etc.)
 - Brace syntax: value flags (`{c=}`, `{z=}`, `{f=}`, `{s=}`, `{u=}`, `{t=}`, `{l=}`, `{a=}`, `{o=}`, `{n=}`, `{k=}`, `{x=}`, `{y=}`, `{p=}`, `{h=}`, `{e=}`)
 - Brace syntax: reset (`{0}`)
 - Brace syntax: implicit `t=$0` behavior
@@ -1668,15 +1823,19 @@ positional-pat = "^$" / "^" / "$"
 - Brace syntax: comments (`{"=text}`)
 - Brace syntax: bookmarks (`{@=name}`, `{u=#name}`)
 
-### Level 4: Commands & CLI (REQUIRED)
+### Level 4: Commands, Addressing & CLI (REQUIRED)
 
 - All Level 3 features
-- Delete command: `d/pattern/`
-- Append command: `a/pattern/text/`
-- Insert command: `i/pattern/text/`
+- Paragraph addressing: `N`, `N,M`, `$`, `N,$` across top-level elements (`paragraph`, `table`, `toc`)
+- Addressed forms: `Nd`, `N,Md`, `$d`, `N,$d`, `N,Md/pat/`, `Ns///`, `N,Ms///`, `Na/text/`, `Ni/text/`, `$a/text/`
+- Address validation & safe terminal deletion semantics
+- Delete command: `d/pattern/[flags]`
+- Append command: `a/pattern/text/[flags]`
+- Insert command: `i/pattern/text/[flags]`
 - Transliterate command: `y/source/dest/`
 - Dry-run mode: `--dry-run` / `-n`
-- Batch processing: `-f file.sed`
+- Batch processing: `-f file.sed`, `-e <expr>`, stdin piping
+- Document introspection (`structure`, `cat -N`) and multi-tab scoping (`--tab`) (RECOMMENDED)
 
 ### Level 5: Smart Chips & Charts (REQUIRED)
 
@@ -1702,9 +1861,15 @@ positional-pat = "^$" / "^" / "$"
 |---------|--------|-------------------|
 | Basic `s///` syntax | ✅ Stable | REQUIRED |
 | Global flag `g` | ✅ Stable | REQUIRED |
-| Nth occurrence flag `n` | ✅ Stable | REQUIRED |
+| Case-insensitive flag `i` | ✅ Stable | REQUIRED |
+| Nth occurrence flag `N` | ✅ Stable | REQUIRED |
 | Multiline flag `m` | ✅ Stable | REQUIRED |
+| Paragraph addressing (`N`, `N,M`, `$`, `N,$`) | ✅ Stable | REQUIRED |
+| Addressed commands (`Nd`, `Ns///`, `Na/text/`, `Ni/text/`) | ✅ Stable | REQUIRED |
+| Document introspection (`structure`, `cat -N`) | ✅ Stable | RECOMMENDED |
+| Multi-tab / section scoping (`--tab`) | ✅ Stable | RECOMMENDED |
 | Brace syntax: basic parsing | ✅ Stable | REQUIRED |
+| Brace syntax: flexible placement (`{b}text`, `text{b}`, `{c=red}text{b}`) | ✅ Stable | REQUIRED |
 | Brace syntax: boolean flags (`b`, `i`, `_`, `-`, `#`, `^`, `,`, `w`) | ✅ Stable | REQUIRED |
 | Brace syntax: inline scoping (`{b=text}`, `{^=text}`, etc.) | ✅ Stable | REQUIRED |
 | Brace syntax: negation (`!b`) | ✅ Stable | REQUIRED |
@@ -1735,9 +1900,9 @@ positional-pat = "^$" / "^" / "$"
 | Image dimensions `{x=N}`, `{x=N y=M}` | ✅ Stable | REQUIRED |
 | Native regex mode | ✅ Stable | RECOMMENDED |
 | Positional insert (`^$`, `^`, `$`) | ✅ Stable | REQUIRED |
-| Delete command `d/pattern/` | ✅ Stable | REQUIRED |
-| Append command `a/pattern/text/` | ✅ Stable | REQUIRED |
-| Insert command `i/pattern/text/` | ✅ Stable | REQUIRED |
+| Delete command `d/pattern/` & `[addr]d` | ✅ Stable | REQUIRED |
+| Append command `a/pattern/text/` & `[addr]a/text/` | ✅ Stable | REQUIRED |
+| Insert command `i/pattern/text/` & `[addr]i/text/` | ✅ Stable | REQUIRED |
 | Transliterate command `y/src/dst/` | ✅ Stable | REQUIRED |
 | Table creation (`{T=RxC}`) | ✅ Stable | REQUIRED |
 | Table deletion (`{T=N}`, `{T=*}`) | ✅ Stable | REQUIRED |
@@ -1748,7 +1913,7 @@ positional-pat = "^$" / "^" / "$"
 | Column operations (`{T=1!col=+N}`, `{T=1!col=$+}`) | ✅ Stable | REQUIRED |
 | Table merge (`{T=1!r1,c1:r2,c2}/merge/`) | ✅ Stable | REQUIRED |
 | Dry-run mode (`--dry-run`, `-n`) | ✅ Stable | REQUIRED |
-| Batch processing (`-f file.sed`) | ✅ Stable | REQUIRED |
+| Batch processing (`-f file.sed`, `-e`, stdin) | ✅ Stable | REQUIRED |
 | Markdown formatting (`**`, `*`, `` ` ``, `~~`) | ✅ Stable | RECOMMENDED |
 | Markdown headings (`#` through `######`) | ✅ Stable | RECOMMENDED |
 | Markdown lists (`-`, `1.`, nested) | ✅ Stable | RECOMMENDED |
@@ -1756,6 +1921,12 @@ positional-pat = "^$" / "^" / "$"
 | Footnotes `[^text]` | ✅ Stable | RECOMMENDED |
 | Table cell styling | 🔮 Proposed | OPTIONAL |
 | @ mentions | 🔮 Proposed | OPTIONAL |
+
+### Known Implementations
+
+- **[openclaw/gogcli](https://github.com/openclaw/gogcli)** (Go) — Reference CLI & Google Docs implementation (`gog docs sed`, `gog docs structure`, `gog docs cat -N`, `internal/docssed`)
+- **`visionik/libsedmat-go`** (Go, in progress) — Standalone target-agnostic Go library extracted from `gogcli`
+- **`@voxio/sedmat`** (TypeScript) — Target-agnostic TypeScript parser & OOXML WordprocessingML (`libMW`) executor
 
 ---
 
@@ -1926,6 +2097,8 @@ Implementations MUST handle errors gracefully:
 | Error | Behavior |
 |-------|----------|
 | Invalid regex | MUST report error, MUST NOT modify document |
+| Invalid or out-of-range paragraph address | MUST report error (including element count when out of range), MUST NOT modify document |
+| Address without command or reversed range | MUST report parse error, MUST NOT modify document |
 | Unmatched delimiter | MUST report error |
 | Invalid brace syntax | SHOULD report warning, MAY attempt recovery |
 | Invalid image reference | SHOULD report warning, MAY skip |
@@ -1948,7 +2121,7 @@ Implementations MUST handle errors gracefully:
 
 ## Future Considerations
 
-> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.5.
+> **Note**: The following features are under consideration for future versions but are not part of SEDMAT 3.6.
 
 ### Document-Level Directives
 
@@ -1977,20 +2150,31 @@ This feature is deferred pending implementation experience.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    SEDMAT 3.5 Quick Reference                     │
+│                    SEDMAT 3.6 Quick Reference                     │
+├──────────────────────────────────────────────────────────────────┤
+│ PARAGRAPH ADDRESSING (1-based: paragraph, table, toc)   ✅ STABLE │
+│   N / N,M / $ / N,$              Single, range, last, to-end      │
+│   5d   3,7d   $d   3,$d          Delete addressed element(s)      │
+│   3,7d/pattern/                  Delete addressed matching regex  │
+│   5s/pat/rep/[flags]             Substitute within element 5      │
+│   5a/text/   $a/text/            Append after addressed element   │
+│   3i/text/   1i/text/            Insert before addressed element  │
+│   structure / cat -N             List numbered elements [1]..[N]  │
 ├──────────────────────────────────────────────────────────────────┤
 │ COMMANDS                                                          │
-│   s/pattern/replacement/[flags]  Substitute                       │
-│   d/pattern/                     Delete matching paragraphs       │
-│   a/pattern/text/                Append after matching paragraphs │
-│   i/pattern/text/                Insert before matching paragraphs│
-│   y/source/dest/                 Transliterate characters         │
+│   [addr]s/pattern/replacement/[flags]  Substitute                 │
+│   d/pattern/[flags] / [addr]d          Delete paragraphs          │
+│   a/pattern/text/   / [addr]a/text/    Append after paragraphs    │
+│   i/pattern/text/   / [addr]i/text/    Insert before paragraphs   │
+│   y/source/dest/                       Transliterate characters   │
 ├──────────────────────────────────────────────────────────────────┤
 │ FLAGS                                                             │
-│   g          Global (all matches)    m     Multiline mode         │
-│   2-9        Nth occurrence only     (none) First match only      │
+│   g          Global (all matches)    i     Case-insensitive       │
+│   m          Multiline mode          N     Nth occurrence (1..N)  │
+│   (none)     First match only        gi/gm Combine flags          │
 ├──────────────────────────────────────────────────────────────────┤
 │ BRACE SYNTAX {flags} — CANONICAL FORMATTING             ✅ STABLE │
+│   Placement: {b}text  |  text{b}  |  {c=red}text{b}  |  {b} ($0)  │
 │                                                                   │
 │ BOOLEAN FLAGS (presence activates):                               │
 │   {b}         Bold          {i}         Italic                    │
@@ -2100,13 +2284,38 @@ This feature is deferred pending implementation experience.
 ├──────────────────────────────────────────────────────────────────┤
 │ CLI OPTIONS                                                       │
 │   --dry-run / -n            Preview changes (no modify)           │
+│   -e <expr>                 Inline expression (repeatable)        │
 │   -f file.sed               Batch expressions from file           │
+│   -p                        Paste mode (insert file as seed text) │
+│   --tab <title-or-id>       Scope addressing/edits to tab/section │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Changelog
+
+### v3.6 (2026-11-23)
+
+**New Features (incorporated from `openclaw/gogcli` reference implementation):**
+
+- **Classic `sed` Paragraph Addressing (`N`, `N,M`, `$`, `N,$`)**:
+  - 1-based addressing across top-level document elements (`paragraph`, `table`, `toc`)
+  - Addressed commands: `Nd`, `N,Md`, `$d`, `N,$d`, `N,Md/pattern/[flags]`, `[addr]s/pat/rep/[flags]`, `[addr]a/text/`, `[addr]i/text/` (single-argument append/insert without a search pattern)
+  - Strict validation rules (`$` prohibited as range start, reversed ranges rejected, out-of-range indices report element count, address-without-command rejected)
+  - Safe terminal deletion semantics for contiguous `N,$d`, single `$d`, and sole-element `1d` preserving trailing document sentinels
+- **Document Introspection Conventions (RECOMMENDED)**:
+  - `structure` listing and `cat -N` (`[1]`, `[2]`, ...) numbered output aligned 1:1 with SEDMAT paragraph addresses
+- **Multi-Tab / Section Scoping (`--tab`)**:
+  - Scope introspection and addressed edits to a named/ID'd tab or section
+- **Case-Insensitive Flag (`i`) & General Positive Nth Occurrence (`N`)**:
+  - `i` flag (`(?i)`) supported on `s`, `d`, `a`, `i` commands alongside `m`, `g`, and arbitrary positive integer `N`
+- **Flexible Brace Placement**:
+  - Documented canonical braces before text (`{b}hello`), after text (`hello{b}`), and surrounding text (`{c=red}warning{b}`), in addition to standalone `{b}` (`t=$0`) and inline `{b=text}`
+- **CLI Modes**:
+  - Documented `-e` repeatable inline expressions, stdin/heredoc piping, `-p` paste mode, and `--tab` scoping
+- **Spec Updates**:
+  - Updated Expression Anatomy & Processing Model diagrams, ABNF grammar (`address`, `addr-single`, `addr-range`, `regex-flags`), Conformance Levels, Implementation Status (with Known Implementations), Error Handling, and Quick Reference Card
 
 ### v3.5 (2026-02-18)
 
