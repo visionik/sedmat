@@ -607,7 +607,7 @@ s/success/{c=green b}/g
 s/muted/{c=gray}/g
 ```
 
-### Reset: `{0}` ✅ STABLE
+### Reset: `{0}` and Additive Mode: `{!0}` ✅ STABLE
 
 The `{0}` flag resets ALL formatting to defaults, like CSS `all: unset`:
 
@@ -615,6 +615,13 @@ The `{0}` flag resets ALL formatting to defaults, like CSS `all: unset`:
 s/messy text/{0}/g            # Strip all formatting
 s/messy text/{0 b}/g          # Reset then apply bold only
 s/weird font/{0 f=Arial}/g    # Reset then set font
+```
+
+Conversely, `{!0}` explicitly opts out of any implicit formatting reset (additive mode), ensuring co-occurring flags layer onto existing text formatting rather than clearing untouched attributes:
+
+```bash
+s/styled text/{!0 c=red}/g    # Add red color while preserving existing bold/font/size
+s/heading/{!0 i}/g            # Add italic additively without resetting existing styles
 ```
 
 You can also reset individual attributes by using bare value flags:
@@ -1666,11 +1673,12 @@ replacement    = *( plain-text / brace-expr / format-expr / back-ref / image-exp
 
 ; --- Brace Syntax (v3.6) ---
 brace-expr     = "{" brace-body "}"
-brace-body     = reset-all / brace-flags
+brace-body     = reset-all / no-reset / brace-flags
 reset-all      = "0" *( SP brace-flag )                  ; {0} or {0 b i}
+no-reset       = "!0" *( SP brace-flag )                 ; {!0 b} additive mode (opt out of implicit reset)
 
 brace-flags    = brace-flag *( SP brace-flag )
-brace-flag     = bool-flag / neg-flag / value-flag / break-flag
+brace-flag     = "!0" / bool-flag / neg-flag / value-flag / break-flag
                  / comment-flag / bookmark-flag / table-flag / image-flag
                  / toc-flag / check-flag
 
@@ -2210,8 +2218,9 @@ This feature is deferred pending implementation experience.
 │ IMPLICIT t= RULE:                                                 │
 │   {b} expands to {b t=$0} — matched text is preserved             │
 │                                                                   │
-│ RESET:                                                            │
+│ RESET / ADDITIVE:                                                 │
 │   {0}         Reset ALL     {0 b}       Reset + bold              │
+│   {!0}        Additive mode {!0 c=red}  Layer flags (no reset)    │
 │                                                                   │
 │ BREAKS:                                                           │
 │   {+}         Horiz rule    {+=p}       Page break                │
@@ -2310,6 +2319,8 @@ This feature is deferred pending implementation experience.
   - Scope introspection and addressed edits to a named/ID'd tab or section
 - **Case-Insensitive Flag (`i`) & General Positive Nth Occurrence (`N`)**:
   - `i` flag (`(?i)`) supported on `s`, `d`, `a`, `i` commands alongside `m`, `g`, and arbitrary positive integer `N`
+- **Additive Mode (`{!0}`)**:
+  - Opts out of implicit formatting reset so co-occurring flags layer additively onto existing styles (`{!0 c=red}`), complementing explicit full reset `{0}`
 - **Flexible Brace Placement**:
   - Documented canonical braces before text (`{b}hello`), after text (`hello{b}`), and surrounding text (`{c=red}warning{b}`), in addition to standalone `{b}` (`t=$0`) and inline `{b=text}`
 - **CLI Modes**:
