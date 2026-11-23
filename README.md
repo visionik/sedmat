@@ -1,6 +1,6 @@
 # SEDMAT: Sed-Expression-Driven Mark(up|down) Annotation & Transformation
 
-**Version**: 3.6  
+**Version**: 3.7  
 **Last Updated**: 2026-11-23  
 **Status**: Draft
 
@@ -277,11 +277,61 @@ gog docs sed <DOC_ID> '$a/Appendix A/'
 
 ### Multi-Tab / Section Scoping (`--tab`)
 
-For multi-tab or multi-section documents (e.g., Google Docs Tabs, Word sections, Slides, Sheets), CLI implementations SHOULD support `--tab <title-or-id>` to scope both introspection (`structure`, `cat -N`) and addressed SEDMAT expressions to the selected tab or section:
+For multi-tab or multi-section documents (e.g., Google Docs Tabs, Word sections, Slides, Sheets), CLI implementations SHOULD support `--tab <title-or-id>` (or `--slide` / `--sheet`) as shorthand for an implicit inline [Container Scope (`@`)](#container-scopes----multi-document-types-v37):
 
 ```bash
 gog docs structure <DOC_ID> --tab "Summary"
 gog docs sed <DOC_ID> --tab "Summary" '3d'
+```
+
+---
+
+## Container Scopes (`@`) — Multi-Document Types (v3.7)
+
+> **Status**: 🧪 DRAFT (added in v3.7) — Format-agnostic container addressing unifying PowerPoint Slides, Excel/Sheets Worksheets, Google Docs Tabs, Word Sections/Headers/Footers, and PDF Pages without per-app prefix collisions.
+
+Bare numeric addresses (`1`, `3,7`, `$`) ALWAYS address **content** inside the active container (paragraphs, rows, blocks). To address the **container itself** or scope edits to specific containers and named sub-regions, prefix an expression with `@`:
+
+### Syntax
+
+| Form | Example | Semantics |
+|------|---------|-----------|
+| **Container-level ops** (no `:`) | `@3d`, `@2,4d`, `@$d` | Delete container(s) (Slide / Sheet / Tab / Page) |
+| | `@$a/{layout=two-col}Next Steps/` | Append a new container after the last container |
+| | `@2i/{layout=content}Overview/` | Insert a new container before container 2 |
+| | `@3{move=1}`, `@2{dup}`, `@4{hide}` | Move, duplicate, or hide a container |
+| **Container-scoped edits** (`@<target>:`) | `@2:s/500ms/{b c=green t=120ms}/g` | Substitute within container 2 |
+| | `@2,5:s/Voxio/{b c=blue}/g` | Substitute across containers 2–5 |
+| | `@2:2d`, `@2:1,3s/old/new/g` | 1-based paragraph/element addressing inside container 2 |
+| | `@*:s/DRAFT//g` | All containers (equivalent to unscoped) |
+| **Named containers** | `@Summary:3d`, `@"Q4 Budget":s/USD/EUR/g` | Select container by title/name (unifies `--tab` / `--sheet`) |
+| **Optional typed sugar** | `@slide=2:...`, `@sheet=Budget:...`, `@tab=Summary:...`, `@page=4:...` | Explicit container-type assertion |
+| **Named sub-regions** (`@<target>:<region>:`) | `@2:title:s/.*/{c=navy}New Title/` | PowerPoint title placeholder (`title`, `sub`, `body`, `notes`, `shape=N`) |
+| | `@2:notes:a/Pause for Q&A./` | PowerPoint speaker notes |
+| | `@header:s/DRAFT/FINAL/`, `@1:footer:s/2025/2026/` | Word / Docs headers & footers |
+| **Tables & Images in scope** | `@2:{T=1!A1}/{b}Metric/`, `@2:{img=1}/{x=480}/` | Scoped table/image ops inside container 2 |
+
+### Slide & Shape Container Brace Flags (v3.7)
+
+| Flag | Example | Effect |
+|------|---------|--------|
+| `layout=` | `{layout=two-col}` | Slide layout (`title`, `content`, `two-col`, `section`, `comparison`, `blank`) |
+| `zone=` | `{zone=left}` | Semantic placement zone (`left`, `right`, `top`, `bottom`, `center`, `footer`) |
+| `shape=` | `{shape=roundRect fill=#1E293B stroke=#38BDF8}` | Preset shape geometry, fill, and stroke |
+| `notes=` | `@2:{notes="Talk track"}` | Set speaker notes inline (parallels `{"=comment}`) |
+| `transition=` | `@2:{transition=fade}` | Slide transition (`none`, `fade`, `push`, `wipe`) |
+| `move=`, `dup`, `hide` | `@3{move=1}`, `@2{dup}`, `@4{hide}` | Structural container mutations |
+
+### Example: Multi-Slide PowerPoint Script
+
+```sed
+@1:{z=#0F172A}
+@1:title:s/.*/{c=white s=40}Voxio 2.0 Architecture/
+@1:sub:s/.*/{c=#94A3B8}Voice-Native Office Studio/
+@2:body:s/(\d+ms)/{b c=green}$1/g
+@2:notes:s/.*/Highlight the 120ms WebTransport benchmark./
+@$a/{layout=two-col}Before vs After/
+@$:{T=1!A1}/{b}Metric/
 ```
 
 ---
@@ -1637,6 +1687,13 @@ Implementations MUST process nesting from innermost to outermost.
 sedmat-line    = sedmat-expr / comment
 comment        = "#" *VCHAR
 
+; --- Container Scopes (v3.7) ---
+container-scope = "@" [container-type "="] container-target [":" region-name] ":"
+container-op    = "@" [container-type "="] container-target ( "d" / "a" delimiter text delimiter / "i" delimiter text delimiter / brace-expr )
+container-type  = "slide" / "sheet" / "tab" / "page" / "section"
+container-target = address / "*" / DQUOTE 1*(%x20-21 / %x23-7E) DQUOTE / 1*(ALPHA / DIGIT / "-" / "_")
+region-name     = "title" / "sub" / "subtitle" / "body" / "notes" / "header" / "footer" / ("shape=" pos-int)
+
 ; --- Addresses (v3.6) ---
 address        = addr-single / addr-range
 addr-single    = pos-int / "$"
@@ -1644,7 +1701,8 @@ addr-range     = pos-int "," (pos-int / "$")             ; "$" MUST NOT be range
 pos-int        = %x31-39 *DIGIT                          ; 1-based positive integer
 
 ; --- Commands ---
-sedmat-expr    = subst-expr / delete-expr / append-expr / insert-expr / xlat-expr
+sedmat-expr    = container-op
+               / [container-scope] ( subst-expr / delete-expr / append-expr / insert-expr / xlat-expr / brace-expr )
 
 subst-expr     = [address] "s" delimiter pattern delimiter replacement delimiter [flags]
 delete-expr    = address "d"
@@ -2158,7 +2216,16 @@ This feature is deferred pending implementation experience.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    SEDMAT 3.6 Quick Reference                     │
+│                    SEDMAT 3.7 Quick Reference                     │
+├──────────────────────────────────────────────────────────────────┤
+│ CONTAINER SCOPES (@ — Slides, Sheets, Tabs, Pages, Headers) v3.7 │
+│   @2:s/old/new/g                 Edit inside container 2          │
+│   @2,5:s/old/new/g   @*:...      Range or all containers          │
+│   @"Summary":3d  @slide=2:...    By name or typed assertion       │
+│   @2:title:s/.../ @2:notes:a/... Named sub-region / speaker notes │
+│   @header:s/.../  @footer:s/.../ Word/Docs header & footer        │
+│   @3d  @$a/{layout=two-col}Hi/   Delete/append/insert container   │
+│   @3{move=1}  @2{dup}  @4{hide}  Reorder, duplicate, hide         │
 ├──────────────────────────────────────────────────────────────────┤
 │ PARAGRAPH ADDRESSING (1-based: paragraph, table, toc)   ✅ STABLE │
 │   N / N,M / $ / N,$              Single, range, last, to-end      │
@@ -2303,6 +2370,19 @@ This feature is deferred pending implementation experience.
 ---
 
 ## Changelog
+
+### v3.7 (2026-11-23 — Draft)
+
+**New Features:**
+
+- **Format-Agnostic Container Scopes (`@`)**:
+  - Unified container addressing across PowerPoint Slides, Excel/Sheets Worksheets, Google Docs Tabs, Word Sections/Headers/Footers, and PDF Pages without single-letter collisions (`@2:`, `@2,5:`, `@$:`, `@*:`, `@"Summary":`, `@header:`)
+  - Optional typed container assertions (`@slide=2:`, `@sheet=Budget:`, `@tab=Summary:`, `@page=4:`)
+  - Named sub-region scoping (`@2:title:`, `@2:sub:`, `@2:body:`, `@2:notes:`, `@1:header:`, `@1:footer:`, `@2:shape=2:`)
+  - Container-level structural commands (`@3d`, `@2,4d`, `@$a/.../`, `@2i/.../`, `@3{move=1}`, `@2{dup}`, `@4{hide}`)
+- **Slide & Shape Brace Flags**:
+  - Added `{layout=}`, `{zone=}`, `{shape=}`, `{fill=}`, `{stroke=}`, `{notes=}`, `{transition=}`, `{move=}`, `{dup}`, `{hide}`
+  - Reference implementation: `@voxio/sedmat` + `@voxio/libmpp` (PowerPoint `.pptx`)
 
 ### v3.6 (2026-11-23)
 
