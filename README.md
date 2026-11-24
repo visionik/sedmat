@@ -1856,7 +1856,7 @@ positional-pat = "^$" / "^" / "$"
 - Brace syntax: boolean flags (`{b}`, `{i}`, `{_}`, `{-}`, `{#}`, `{^}`, `{,}`, `{w}`), negation (`{!b}`)
 - Brace syntax: flexible placement (`{b}text`, `text{b}`, `{c=red}text{b}`) and inline scoping (`{b=text}`, `{^=text}`, `{,=text}`, etc.)
 - Brace syntax: value flags (`{c=}`, `{z=}`, `{f=}`, `{s=}`, `{u=}`, `{t=}`, `{l=}`, `{a=}`, `{o=}`, `{n=}`, `{k=}`, `{x=}`, `{y=}`, `{p=}`, `{h=}`, `{e=}`)
-- Brace syntax: reset (`{0}`)
+- Brace syntax: reset (`{0}`) and additive no-reset (`{!0}`)
 - Brace syntax: implicit `t=$0` behavior
 - Brace syntax: `{h}` defaults to HEADING_1, `{h=0}` for NORMAL_TEXT
 - Brace syntax: named colors (RECOMMENDED) and hex colors (REQUIRED)
@@ -1918,6 +1918,10 @@ positional-pat = "^$" / "^" / "$"
 - Markdown lists: `- bullet`, `1. numbered`, nested
 - Markdown blocks: `---` (horizontal rule), `> quote`, ``` code blocks ```
 - Footnotes: `[^text]`
+
+### Conformance Test Suite
+
+Canonical, language-agnostic JSON test vectors for SEDMAT v3.6 are published in [`conformance/v3.6.json`](./conformance/v3.6.json) (see [`conformance/README.md`](./conformance/README.md)) so Go (`libsedmat-go`), TypeScript, and other implementations can verify identical parser, addressing, brace DSL, and execution behavior.
 
 ---
 

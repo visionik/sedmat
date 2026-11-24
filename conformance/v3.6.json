@@ -1,0 +1,396 @@
+{
+  "spec": "SEDMAT",
+  "version": "3.6",
+  "description": "Canonical cross-language SEDMAT v3.6 conformance test vectors shared across Go (libsedmat-go) and TypeScript implementations.",
+  "parse_vectors": [
+    {
+      "name": "basic_substitute",
+      "input": "s/foo/bar/",
+      "command": "s",
+      "pattern": "foo",
+      "replacement": "bar",
+      "global": false
+    },
+    {
+      "name": "substitute_flag_g",
+      "input": "s/foo/bar/g",
+      "command": "s",
+      "pattern": "foo",
+      "replacement": "bar",
+      "global": true
+    },
+    {
+      "name": "substitute_flag_i",
+      "input": "s/foo/bar/i",
+      "command": "s",
+      "pattern": "(?i)foo",
+      "replacement": "bar",
+      "global": false
+    },
+    {
+      "name": "substitute_flag_m",
+      "input": "s/^foo/bar/m",
+      "command": "s",
+      "pattern": "(?m)^foo",
+      "replacement": "bar",
+      "global": false
+    },
+    {
+      "name": "substitute_flag_nth",
+      "input": "s/foo/bar/2",
+      "command": "s",
+      "pattern": "foo",
+      "replacement": "bar",
+      "nth": 2
+    },
+    {
+      "name": "substitute_flags_gi",
+      "input": "s/foo/bar/gi",
+      "command": "s",
+      "pattern": "(?i)foo",
+      "replacement": "bar",
+      "global": true
+    },
+    {
+      "name": "substitute_flags_gim",
+      "input": "s/^foo/bar/gim",
+      "command": "s",
+      "pattern": "(?m)(?i)^foo",
+      "replacement": "bar",
+      "global": true
+    },
+    {
+      "name": "address_single_delete",
+      "input": "5d",
+      "command": "d",
+      "address": {"start": 5, "end": 0, "has_range": false}
+    },
+    {
+      "name": "address_range_delete",
+      "input": "2,4d",
+      "command": "d",
+      "address": {"start": 2, "end": 4, "has_range": true}
+    },
+    {
+      "name": "address_last_delete",
+      "input": "$d",
+      "command": "d",
+      "address": {"start": -1, "end": 0, "has_range": false}
+    },
+    {
+      "name": "address_range_to_last_delete",
+      "input": "2,$d",
+      "command": "d",
+      "address": {"start": 2, "end": -1, "has_range": true}
+    },
+    {
+      "name": "address_range_pattern_delete",
+      "input": "2,4d/DRAFT/",
+      "command": "d",
+      "pattern": "DRAFT",
+      "address": {"start": 2, "end": 4, "has_range": true}
+    },
+    {
+      "name": "address_substitute",
+      "input": "3,7s/draft/final/gi",
+      "command": "s",
+      "pattern": "(?i)draft",
+      "replacement": "final",
+      "global": true,
+      "address": {"start": 3, "end": 7, "has_range": true}
+    },
+    {
+      "name": "address_append",
+      "input": "$a/Appendix A/",
+      "command": "a",
+      "replacement": "Appendix A",
+      "address": {"start": -1, "end": 0, "has_range": false}
+    },
+    {
+      "name": "address_insert",
+      "input": "1i/Preamble/",
+      "command": "i",
+      "replacement": "Preamble",
+      "address": {"start": 1, "end": 0, "has_range": false}
+    },
+    {
+      "name": "error_address_without_command_single",
+      "input": "5",
+      "want_error": true
+    },
+    {
+      "name": "error_address_without_command_range",
+      "input": "1,3",
+      "want_error": true
+    },
+    {
+      "name": "error_address_without_command_dollar",
+      "input": "$",
+      "want_error": true
+    },
+    {
+      "name": "error_dollar_as_range_start",
+      "input": "$,2d",
+      "want_error": true
+    },
+    {
+      "name": "error_dollar_to_dollar",
+      "input": "$,$d",
+      "want_error": true
+    },
+    {
+      "name": "error_zero_address",
+      "input": "0d",
+      "want_error": true
+    },
+    {
+      "name": "error_zero_range_end",
+      "input": "2,0d",
+      "want_error": true
+    },
+    {
+      "name": "error_trailing_comma",
+      "input": "3,d",
+      "want_error": true
+    },
+    {
+      "name": "error_reversed_range_parse",
+      "input": "5,2d",
+      "want_error": true
+    },
+    {
+      "name": "brace_prefix_placement",
+      "input": "s/foo/{b}bar/",
+      "command": "s",
+      "pattern": "foo",
+      "replacement": "bar",
+      "expect_brace": {"bold": true}
+    },
+    {
+      "name": "brace_suffix_placement",
+      "input": "s/foo/bar{b}/",
+      "command": "s",
+      "pattern": "foo",
+      "replacement": "bar",
+      "expect_brace": {"bold": true}
+    },
+    {
+      "name": "brace_surround_placement",
+      "input": "s/foo/{c=red}bar{b}/",
+      "command": "s",
+      "pattern": "foo",
+      "replacement": "bar",
+      "expect_brace": {"bold": true, "color": "#FF0000"}
+    },
+    {
+      "name": "brace_implicit_t_zero",
+      "input": "s/warning/{b c=red}/",
+      "command": "s",
+      "pattern": "warning",
+      "replacement": "",
+      "expect_brace": {"bold": true, "color": "#FF0000"}
+    },
+    {
+      "name": "brace_inline_scoping",
+      "input": "s/x/{b=bold} plain/",
+      "command": "s",
+      "pattern": "x",
+      "replacement": "bold plain",
+      "expect_span_count": 1
+    },
+    {
+      "name": "brace_reset_zero",
+      "input": "s/x/{0}clean/",
+      "command": "s",
+      "pattern": "x",
+      "replacement": "clean",
+      "expect_brace": {"reset": true}
+    },
+    {
+      "name": "brace_no_reset",
+      "input": "s/x/{!0 b}additive/",
+      "command": "s",
+      "pattern": "x",
+      "replacement": "additive",
+      "expect_brace": {"bold": true, "no_reset": true}
+    },
+    {
+      "name": "brace_no_reset_bare",
+      "input": "s/x/{!0}preserve/",
+      "command": "s",
+      "pattern": "x",
+      "replacement": "preserve",
+      "expect_brace": {"no_reset": true}
+    },
+    {
+      "name": "brace_no_reset_multispan",
+      "input": "s/x/{!0}additive{b}/",
+      "command": "s",
+      "pattern": "x",
+      "replacement": "additive",
+      "expect_brace": {"bold": true, "no_reset": true}
+    },
+    {
+      "name": "brace_break_page",
+      "input": "s/PAGE/{+=p}/",
+      "command": "s",
+      "pattern": "PAGE",
+      "expect_brace": {"has_break": true, "break": "p"}
+    },
+    {
+      "name": "brace_break_column",
+      "input": "s/COL/{+=c}/",
+      "command": "s",
+      "pattern": "COL",
+      "expect_brace": {"has_break": true, "break": "c"}
+    },
+    {
+      "name": "brace_break_section",
+      "input": "s/SEC/{+=s}/",
+      "command": "s",
+      "pattern": "SEC",
+      "expect_brace": {"has_break": true, "break": "s"}
+    },
+    {
+      "name": "brace_columns",
+      "input": "s/COLS/{cols=2}Two columns/",
+      "command": "s",
+      "pattern": "COLS",
+      "replacement": "Two columns",
+      "expect_brace": {"cols": 2}
+    },
+    {
+      "name": "brace_checkbox",
+      "input": "s/TODO/{check}Task item/",
+      "command": "s",
+      "pattern": "TODO",
+      "replacement": "Task item",
+      "expect_brace": {"check_set": true}
+    },
+    {
+      "name": "brace_toc",
+      "input": "s/TOC/{toc}/",
+      "command": "s",
+      "pattern": "TOC",
+      "expect_brace": {"toc": -1}
+    },
+    {
+      "name": "brace_comment",
+      "input": "s/note/{\"=needs review}note/",
+      "command": "s",
+      "pattern": "note",
+      "replacement": "note",
+      "expect_brace": {"comment": "needs review"}
+    },
+    {
+      "name": "brace_bookmark",
+      "input": "s/Intro/{@=intro_sec}Intro/",
+      "command": "s",
+      "pattern": "Intro",
+      "replacement": "Intro",
+      "expect_brace": {"bookmark": "intro_sec"}
+    },
+    {
+      "name": "brace_smart_chip",
+      "input": "s/Alice/{u=chip:\\/\\/person\\/alice@example.com}Alice/",
+      "command": "s",
+      "pattern": "Alice",
+      "replacement": "Alice",
+      "expect_brace": {"url": "chip://person/alice@example.com"}
+    },
+    {
+      "name": "brace_table_create",
+      "input": "s/TBL/{T=3x4}/",
+      "command": "s",
+      "pattern": "TBL",
+      "expect_table_create": {"rows": 3, "columns": 4}
+    },
+    {
+      "name": "brace_image",
+      "input": "s/IMG/{img=https:\\/\\/example.com\\/pic.png}/",
+      "command": "s",
+      "pattern": "IMG",
+      "expect_brace": {"img_ref": "https://example.com/pic.png"}
+    }
+  ],
+  "execution_vectors": [
+    {
+      "name": "addressed_delete_single",
+      "paragraphs": ["First", "Second", "Third"],
+      "script": "2d",
+      "expected_paragraphs": ["First", "Third"]
+    },
+    {
+      "name": "addressed_delete_last",
+      "paragraphs": ["First", "Second", "Third"],
+      "script": "$d",
+      "expected_paragraphs": ["First", "Second"]
+    },
+    {
+      "name": "addressed_delete_terminal_range",
+      "paragraphs": ["First", "Second", "Third", "Fourth"],
+      "script": "2,$d",
+      "expected_paragraphs": ["First"]
+    },
+    {
+      "name": "addressed_delete_sole_element",
+      "paragraphs": ["Only paragraph"],
+      "script": "$d",
+      "expected_paragraphs": [""]
+    },
+    {
+      "name": "addressed_delete_with_pattern",
+      "paragraphs": ["Keep 1", "DRAFT 2", "Keep 3", "DRAFT 4"],
+      "script": "1,3d/DRAFT/",
+      "expected_paragraphs": ["Keep 1", "Keep 3", "DRAFT 4"]
+    },
+    {
+      "name": "addressed_substitute_range_case_insensitive",
+      "paragraphs": ["Draft 1", "Draft 2", "DRAFT 3", "Draft 4"],
+      "script": "2,3s/draft/Final/gi",
+      "expected_paragraphs": ["Draft 1", "Final 2", "Final 3", "Draft 4"]
+    },
+    {
+      "name": "addressed_append_and_insert",
+      "paragraphs": ["Alpha", "Beta"],
+      "script": "1i/Header/\n$a/Footer/",
+      "expected_paragraphs": ["Header", "Alpha", "Beta", "Footer"]
+    },
+    {
+      "name": "addressed_append_multiline_escape",
+      "paragraphs": ["Start"],
+      "script": "$a/Line A\\nLine B/",
+      "expected_paragraphs": ["Start", "Line A", "Line B"]
+    },
+    {
+      "name": "implicit_t_zero_preserves_matched_text",
+      "paragraphs": ["Critical warning here"],
+      "script": "s/warning/{b c=red}/",
+      "expected_paragraphs": ["Critical warning here"]
+    },
+    {
+      "name": "nth_occurrence_replacement",
+      "paragraphs": ["foo bar foo baz foo"],
+      "script": "s/foo/QUX/2",
+      "expected_paragraphs": ["foo bar QUX baz foo"]
+    },
+    {
+      "name": "transliterate_vowels",
+      "paragraphs": ["hello world"],
+      "script": "y/aeiou/AEIOU/",
+      "expected_paragraphs": ["hEllO wOrld"]
+    },
+    {
+      "name": "error_out_of_range_address",
+      "paragraphs": ["One", "Two"],
+      "script": "5d",
+      "want_error": true
+    },
+    {
+      "name": "error_empty_document_address",
+      "paragraphs": [],
+      "script": "1d",
+      "want_error": true
+    }
+  ]
+}
